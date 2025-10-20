@@ -5,7 +5,7 @@ A Chrome extension that captures the visible text from the active tab and presen
 ## Features
 
 - One-click extraction of all visible text via `document.body.innerText`
-- Interactive "Exclude Elements" mode that temporarily minimizes the popup so you can click a page element, one at a time, to omit it from the text
+- Interactive "Exclude Elements" mode that temporarily minimizes the popup so you can click page elements to omit them, flashing the popup with updated text after each exclusion while staying in selection mode
 - Right-click any dashed (excluded) element to restore it, or use **Reset** to clear all exclusions
 - Displays page title, URL, word and character counts with exclusion tally
 - Copy-to-clipboard and download-as-text helpers

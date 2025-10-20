@@ -288,7 +288,8 @@
         });
         dispatchText();
       }
-      stopSelection('complete');
+      currentCandidate = null;
+      highlightElement(null);
     };
 
     const keydownHandler = (event) => {
@@ -329,7 +330,8 @@
         sendMessage(MESSAGE_TYPES.ELEMENT_RESTORED, { descriptor, excludedCount: excludedElements.size });
         dispatchText();
       }
-      stopSelection('complete');
+      currentCandidate = null;
+      highlightElement(null);
     };
 
     const cleanup = [];

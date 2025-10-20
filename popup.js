@@ -9,6 +9,7 @@ const statusElement = document.getElementById('status');
 const countElement = document.getElementById('count');
 const exclusionSection = document.getElementById('exclusion-section');
 const exclusionList = document.getElementById('exclusion-list');
+const selectionBadge = document.getElementById('selection-badge');
 
 const MESSAGE_TYPES = {
   TEXT: 'PAGE_TEXT_RESULT',
@@ -41,6 +42,10 @@ let latestExcludedCount = 0;
 let selectionActive = false;
 let currentTabId = null;
 let minimized = false;
+let previewTimer = null;
+let pendingPreview = false;
+
+const PREVIEW_DURATION_MS = 1700;
 
 const setStatus = (message, tone = 'info') => {
   statusElement.textContent = message || '';
@@ -98,6 +103,7 @@ const minimizePopup = () => {
   if (minimized) {
     return;
   }
+  document.body.classList.remove('selection-preview');
   document.body.classList.add('selection-minimized');
   try {
     window.resizeTo(defaultPopupSize.width, MINIMIZED_HEIGHT);
@@ -107,8 +113,8 @@ const minimizePopup = () => {
   minimized = true;
 };
 
-const restorePopup = () => {
-  if (!minimized) {
+const restorePopup = (force = false) => {
+  if (!minimized && !force) {
     return;
   }
   document.body.classList.remove('selection-minimized');
@@ -120,6 +126,28 @@ const restorePopup = () => {
     }
   }
   minimized = false;
+};
+
+const clearPreviewTimer = () => {
+  if (previewTimer) {
+    clearTimeout(previewTimer);
+    previewTimer = null;
+  }
+};
+
+const showSelectionPreview = () => {
+  if (!selectionActive) {
+    return;
+  }
+  clearPreviewTimer();
+  document.body.classList.add('selection-preview');
+  restorePopup(true);
+  previewTimer = setTimeout(() => {
+    document.body.classList.remove('selection-preview');
+    if (selectionActive) {
+      minimizePopup();
+    }
+  }, PREVIEW_DURATION_MS);
 };
 
 const updateCounts = (text, excludedCount = 0) => {
@@ -165,7 +193,7 @@ const populateText = ({ text, title, url, excludedCount = 0, excluded = [] }) =>
   }
   if (hasText && !selectionActive) {
     setStatus('Extraction complete.');
-    restorePopup();
+    restorePopup(true);
   }
 };
 
@@ -188,16 +216,24 @@ const extractPageText = async () => {
 
 const updateSelectionUI = (active) => {
   selectionActive = active;
+  pendingPreview = false;
   refineButton.textContent = active ? 'Finish Selecting' : 'Exclude Elements';
   refineButton.disabled = !latestText && !active;
+  if (selectionBadge) {
+    selectionBadge.hidden = !active;
+  }
+  document.body.classList.toggle('selection-active', active);
   if (active) {
+    clearPreviewTimer();
     minimizePopup();
     copyButton.disabled = true;
     downloadButton.disabled = true;
     resetButton.disabled = true;
     setStatus('Selection mode active. Hover an element and click to exclude. Press Esc to cancel.', 'notice');
   } else {
-    restorePopup();
+    clearPreviewTimer();
+    document.body.classList.remove('selection-preview');
+    restorePopup(true);
     copyButton.disabled = !latestText;
     downloadButton.disabled = !latestText;
     resetButton.disabled = latestExcludedCount === 0;
@@ -215,6 +251,11 @@ const toggleSelectionMode = async () => {
     await sendMessageToTab(tab.id, { type: command });
     if (!selectionActive) {
       // Optimistically update UI; will be confirmed via selection status message.
+      pendingPreview = false;
+      document.body.classList.add('selection-active');
+      if (selectionBadge) {
+        selectionBadge.hidden = false;
+      }
       refineButton.textContent = 'Finish Selecting';
       refineButton.disabled = false;
       setStatus('Preparing selection mode…', 'notice');
@@ -226,7 +267,12 @@ const toggleSelectionMode = async () => {
     selectionActive = false;
     refineButton.textContent = 'Exclude Elements';
     refineButton.disabled = !latestText;
-    restorePopup();
+    clearPreviewTimer();
+    document.body.classList.remove('selection-active', 'selection-preview');
+    if (selectionBadge) {
+      selectionBadge.hidden = true;
+    }
+    restorePopup(true);
   }
 };
 
@@ -242,6 +288,10 @@ const handleMessage = (message, sender) => {
   switch (message.type) {
     case MESSAGE_TYPES.TEXT:
       populateText(message.payload || {});
+      if (selectionActive && pendingPreview) {
+        showSelectionPreview();
+        pendingPreview = false;
+      }
       break;
     case MESSAGE_TYPES.SELECTION_STATUS: {
       const { active = false, reason } = message.payload || {};
@@ -260,11 +310,12 @@ const handleMessage = (message, sender) => {
     case MESSAGE_TYPES.ELEMENT_EXCLUDED: {
       const { descriptor, excludedCount } = message.payload || {};
       if (descriptor) {
-        setStatus(`Excluded ${descriptor}.`, 'info');
+        setStatus(`Excluded ${descriptor}. Continue selecting or press Finish when you're done.`, 'notice');
       }
       if (typeof excludedCount === 'number') {
         refineButton.disabled = false;
       }
+      pendingPreview = true;
       break;
     }
     case MESSAGE_TYPES.ELEMENT_RESTORED: {
@@ -272,6 +323,7 @@ const handleMessage = (message, sender) => {
       if (descriptor) {
         setStatus(all ? 'Cleared all exclusions.' : `Restored ${descriptor}.`, 'info');
       }
+      pendingPreview = true;
       break;
     }
     default:
