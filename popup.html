@@ -13,12 +13,17 @@
   </header>
   <section class="controls">
     <button id="extract-btn" type="button">Extract Text</button>
+    <button id="refine-btn" type="button" disabled>Exclude Elements</button>
     <button id="copy-btn" type="button" disabled>Copy All</button>
     <button id="download-btn" type="button" disabled>Download .txt</button>
   </section>
   <p id="status" class="status" role="status" aria-live="polite"></p>
   <p id="count" class="count"></p>
   <div id="text-container" class="text-container" tabindex="0" aria-label="Extracted page text"></div>
+  <section id="exclusion-section" class="exclusions" hidden>
+    <h2>Excluded Elements</h2>
+    <ul id="exclusion-list"></ul>
+  </section>
   <script src="popup.js"></script>
 </body>
 </html>
