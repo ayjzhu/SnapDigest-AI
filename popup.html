@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Plain Text Snapshot</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Plain Text Snapshot</h1>
+    <p id="metadata" class="metadata">Activate the extractor to load page text.</p>
+  </header>
+  <section class="controls">
+    <button id="extract-btn" type="button">Extract Text</button>
+    <button id="copy-btn" type="button" disabled>Copy All</button>
+    <button id="download-btn" type="button" disabled>Download .txt</button>
+  </section>
+  <p id="status" class="status" role="status" aria-live="polite"></p>
+  <p id="count" class="count"></p>
+  <div id="text-container" class="text-container" tabindex="0" aria-label="Extracted page text"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

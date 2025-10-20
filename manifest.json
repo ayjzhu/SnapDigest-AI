@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Plain Text Snapshot",
+  "description": "Extracts the active page's visible text and presents it in a clean popup view.",
+  "version": "1.0.0",
+  "action": {
+    "default_title": "Plain Text Snapshot",
+    "default_popup": "popup.html"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "tabs"
+  ]
+}
