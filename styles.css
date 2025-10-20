@@ -102,3 +102,27 @@ button:disabled {
   font-size: 12px;
   color: #555555;
 }
+
+.hint {
+  margin: 0;
+  font-size: 11px;
+  color: #6c757d;
+}
+
+body.selection-minimized {
+  gap: 8px;
+}
+
+body.selection-minimized .text-container,
+body.selection-minimized .exclusions,
+body.selection-minimized #count {
+  display: none;
+}
+
+body.selection-minimized header h1 {
+  font-size: 16px;
+}
+
+body.selection-minimized #status {
+  font-size: 12px;
+}

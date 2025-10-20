@@ -7,13 +7,15 @@
   const MESSAGE_TYPES = {
     TEXT: 'PAGE_TEXT_RESULT',
     SELECTION_STATUS: 'PTS_SELECTION_STATUS',
-    ELEMENT_EXCLUDED: 'PTS_ELEMENT_EXCLUDED'
+    ELEMENT_EXCLUDED: 'PTS_ELEMENT_EXCLUDED',
+    ELEMENT_RESTORED: 'PTS_ELEMENT_RESTORED'
   };
 
   const COMMAND_TYPES = {
     EXTRACT: 'PTS_EXTRACT_TEXT',
     START_SELECTION: 'PTS_START_SELECTION',
-    STOP_SELECTION: 'PTS_STOP_SELECTION'
+    STOP_SELECTION: 'PTS_STOP_SELECTION',
+    RESET: 'PTS_RESET_EXCLUSIONS'
   };
 
   const STYLE_ID = 'pts-selection-style';
@@ -200,6 +202,34 @@
     return descriptor;
   };
 
+  const removeExcludedElement = (element) => {
+    if (!element || !(element instanceof Element)) {
+      return null;
+    }
+    if (!excludedElements.has(element)) {
+      return null;
+    }
+    const descriptor = excludedElements.get(element) || describeElement(element) || 'element';
+    excludedElements.delete(element);
+    element.classList.remove(EXCLUDED_CLASS);
+    return descriptor;
+  };
+
+  const resetExclusions = () => {
+    if (!excludedElements.size) {
+      dispatchText();
+      return;
+    }
+    excludedElements.forEach((descriptor, element) => {
+      if (element && element.classList) {
+        element.classList.remove(EXCLUDED_CLASS);
+      }
+    });
+    excludedElements.clear();
+    sendMessage(MESSAGE_TYPES.ELEMENT_RESTORED, { descriptor: 'all exclusions', all: true });
+    dispatchText();
+  };
+
   const stopSelection = (reason = 'complete') => {
     if (!selectionActive) {
       return;
@@ -258,16 +288,13 @@
         });
         dispatchText();
       }
+      stopSelection('complete');
     };
 
     const keydownHandler = (event) => {
       if (event.key === 'Escape') {
         preventDefault(event);
         stopSelection('cancelled');
-        return;
-      }
-      if (selectionActive) {
-        event.stopPropagation();
       }
     };
 
@@ -276,6 +303,33 @@
         return;
       }
       highlightElement(currentCandidate);
+    };
+
+    const contextMenuHandler = (event) => {
+      if (!selectionActive) {
+        return;
+      }
+      const path = event.composedPath ? event.composedPath() : [event.target];
+      const candidate = path.find((node) => node instanceof Element && node.classList?.contains(EXCLUDED_CLASS));
+      if (!candidate) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === 'function') {
+          event.stopImmediatePropagation();
+        }
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === 'function') {
+        event.stopImmediatePropagation();
+      }
+      const descriptor = removeExcludedElement(candidate);
+      if (descriptor) {
+        sendMessage(MESSAGE_TYPES.ELEMENT_RESTORED, { descriptor, excludedCount: excludedElements.size });
+        dispatchText();
+      }
+      stopSelection('complete');
     };
 
     const cleanup = [];
@@ -288,10 +342,10 @@
     register(document, 'click', clickHandler, true);
     register(document, 'mousedown', preventDefault, true);
     register(document, 'mouseup', preventDefault, true);
-    register(document, 'contextmenu', preventDefault, true);
+    register(document, 'contextmenu', contextMenuHandler, true);
     register(document, 'keydown', keydownHandler, true);
-  register(window, 'scroll', realignOverlay, true);
-  register(window, 'resize', realignOverlay, true);
+    register(window, 'scroll', realignOverlay, true);
+    register(window, 'resize', realignOverlay, true);
 
     cleanupSelection = () => {
       cleanup.forEach((fn) => {
@@ -317,6 +371,10 @@
       case COMMAND_TYPES.STOP_SELECTION:
         stopSelection('complete');
         break;
+      case COMMAND_TYPES.RESET:
+        stopSelection('reset');
+        resetExclusions();
+        break;
       default:
         break;
     }
@@ -328,6 +386,29 @@
     }
     handleCommand(message);
   });
+
+  const globalRestoreHandler = (event) => {
+    if (selectionActive) {
+      return;
+    }
+    const path = event.composedPath ? event.composedPath() : [event.target];
+    const candidate = path.find((node) => node instanceof Element && node.classList?.contains(EXCLUDED_CLASS));
+    if (!candidate) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof event.stopImmediatePropagation === 'function') {
+      event.stopImmediatePropagation();
+    }
+    const descriptor = removeExcludedElement(candidate);
+    if (descriptor) {
+      sendMessage(MESSAGE_TYPES.ELEMENT_RESTORED, { descriptor, excludedCount: excludedElements.size });
+      dispatchText();
+    }
+  };
+
+  document.addEventListener('contextmenu', globalRestoreHandler, true);
 
   const scheduleInitialDispatch = () => {
     const trigger = () => {

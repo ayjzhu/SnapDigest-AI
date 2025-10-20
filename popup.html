@@ -14,6 +14,7 @@
   <section class="controls">
     <button id="extract-btn" type="button">Extract Text</button>
     <button id="refine-btn" type="button" disabled>Exclude Elements</button>
+    <button id="reset-btn" type="button" disabled>Reset</button>
     <button id="copy-btn" type="button" disabled>Copy All</button>
     <button id="download-btn" type="button" disabled>Download .txt</button>
   </section>
@@ -23,6 +24,7 @@
   <section id="exclusion-section" class="exclusions" hidden>
     <h2>Excluded Elements</h2>
     <ul id="exclusion-list"></ul>
+    <p class="hint">Right-click a dashed element on the page to restore it.</p>
   </section>
   <script src="popup.js"></script>
 </body>
