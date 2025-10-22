@@ -452,6 +452,12 @@ const handleSummarize = async () => {
   }
   summarizeButton.disabled = true;
   setStatus('Summarizing...', 'notice');
+  
+  // Clear previous summary and show section
+  summaryContainer.textContent = '';
+  summarySection.hidden = false;
+  summaryBadge.textContent = 'streaming...';
+  
   try {
     // Check if the Summarizer API is available
     if (typeof self.Summarizer === 'undefined') {
@@ -485,20 +491,49 @@ const handleSummarize = async () => {
     // Create the summarizer
     const summarizer = await self.Summarizer.create(options);
 
-    // Generate summary
+    // Generate streaming summary
     setStatus('Generating summary...', 'notice');
-    const summary = await summarizer.summarize(latestText);
-    
-    // Display and save the summary
-    displaySummary(summary, currentType, currentLength);
-    await saveSummary(summary, currentType, currentLength);
+    const stream = summarizer.summarizeStreaming(latestText);
+
+    let fullSummary = '';
+    let previousLength = 0;
+
+    for await (const chunk of stream) {
+      // Chrome may yield either incremental deltas or the full text-so-far.
+      const piece = typeof chunk === 'string'
+        ? chunk
+        : (chunk?.text ?? chunk?.content ?? String(chunk ?? ''));
+
+      // If piece already contains the accumulated text, treat it as full text-so-far.
+      if (piece.startsWith(fullSummary)) {
+        fullSummary = piece;
+      } else {
+        fullSummary += piece;
+      }
+
+      summaryContainer.textContent = fullSummary;
+
+      const trimmed = fullSummary.trim();
+      const wordCount = trimmed ? trimmed.split(/\s+/).length : 0;
+      summaryBadge.textContent = `${wordCount} words · ${currentType} · ${currentLength}`;
+
+      if (fullSummary.length - previousLength > 20) {
+        setStatus(`Generating summary... (${wordCount} words)`, 'notice');
+        previousLength = fullSummary.length;
+      }
+    }
+
+    // Display and save the final summary
+    displaySummary(fullSummary, currentType, currentLength);
+    await saveSummary(fullSummary, currentType, currentLength);
     setStatus('Summary complete.', 'info');
-    
+
     // Clean up
     summarizer.destroy();
   } catch (error) {
-    console.error(error);
+    console.error('Summarization error:', error);
     setStatus(error.message || 'Failed to summarize.', 'error');
+    // Keep whatever partial summary we have visible for the user.
   } finally {
     summarizeButton.disabled = !latestText;
   }
