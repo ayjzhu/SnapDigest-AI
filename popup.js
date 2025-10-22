@@ -10,6 +10,7 @@ const summaryContainer = document.getElementById('summary-container');
 const summarySection = document.getElementById('summary-section');
 const summaryBadge = document.getElementById('summary-badge');
 const textContainer = document.getElementById('text-container');
+const textSection = document.getElementById('text-section');
 const textBadge = document.getElementById('text-badge');
 const metadataElement = document.getElementById('metadata');
 const statusElement = document.getElementById('status');
@@ -57,9 +58,10 @@ let pendingPreview = false;
 
 const PREVIEW_DURATION_MS = 1700;
 
-const setStatus = (message, tone = 'info') => {
+const setStatus = (message, tone = 'info', streaming = false) => {
   statusElement.textContent = message || '';
   statusElement.style.color = STATUS_COLORS[tone] || STATUS_COLORS.info;
+  statusElement.classList.toggle('streaming', streaming);
 };
 
 const getActiveTab = () =>
@@ -194,6 +196,13 @@ const populateText = ({ text, title, url, excludedCount = 0, excluded = [] }) =>
   updateCounts(latestText, excludedCount);
   renderExclusions(excluded);
   const hasText = latestText.length > 0;
+  
+  // Show/hide text section based on content
+  if (hasText) {
+    textSection.classList.remove('empty');
+  } else {
+    textSection.classList.add('empty');
+  }
   
   // Update text badge
   if (hasText) {
@@ -446,17 +455,43 @@ const displaySummary = (summary, type, length) => {
   summaryBadge.textContent = `${wordCount} words · ${type} · ${length}`;
 };
 
+// Determine a supported output language for the Summarizer API.
+// The API currently supports a limited set; prefer the user's UI language,
+// falling back to English.
+const getPreferredOutputLanguage = () => {
+  const supported = ['en', 'es', 'ja'];
+  const candidates = [];
+  const docLang = (document.documentElement.getAttribute('lang') || '').toLowerCase();
+  if (docLang) candidates.push(docLang);
+  if (Array.isArray(navigator.languages)) {
+    candidates.push(...navigator.languages.map((l) => String(l).toLowerCase()));
+  }
+  if (navigator.language) {
+    candidates.push(String(navigator.language).toLowerCase());
+  }
+  for (const cand of candidates) {
+    const hit = supported.find((code) => cand.startsWith(code));
+    if (hit) return hit;
+  }
+  return 'en';
+};
+
 const handleSummarize = async () => {
   if (!latestText) {
     return;
   }
   summarizeButton.disabled = true;
-  setStatus('Summarizing...', 'notice');
+  setStatus('Preparing to summarize...', 'notice', true);
   
   // Clear previous summary and show section
   summaryContainer.textContent = '';
   summarySection.hidden = false;
-  summaryBadge.textContent = 'streaming...';
+  summaryBadge.textContent = 'generating...';
+  
+  // Scroll summary section into view
+  setTimeout(() => {
+    summarySection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 100);
   
   try {
     // Check if the Summarizer API is available
@@ -473,17 +508,20 @@ const handleSummarize = async () => {
     // Create summarizer options
     const currentType = summaryType.value;
     const currentLength = summaryLength.value;
+    const preferredLanguage = getPreferredOutputLanguage();
     const options = {
       type: currentType,
       length: currentLength,
-      format: 'plain-text'
+      format: 'plain-text',
+      sharedContext: '',
+      outputLanguage: preferredLanguage
     };
 
     // Add download progress monitor if model needs downloading
     if (availability === 'after-download') {
       options.monitor = (m) => {
         m.addEventListener('downloadprogress', (e) => {
-          setStatus(`Downloading model: ${Math.round(e.loaded * 100)}%`, 'notice');
+          setStatus(`Downloading model: ${Math.round(e.loaded * 100)}%`, 'notice', true);
         });
       };
     }
@@ -492,8 +530,10 @@ const handleSummarize = async () => {
     const summarizer = await self.Summarizer.create(options);
 
     // Generate streaming summary
-    setStatus('Generating summary...', 'notice');
-    const stream = summarizer.summarizeStreaming(latestText);
+    setStatus('Generating summary...', 'notice', true);
+    const stream = await summarizer.summarizeStreaming(latestText, {
+      context: ''
+    });
 
     let fullSummary = '';
     let previousLength = 0;
@@ -512,13 +552,16 @@ const handleSummarize = async () => {
       }
 
       summaryContainer.textContent = fullSummary;
+      
+      // Auto-scroll to bottom of summary container as text grows
+      summaryContainer.scrollTop = summaryContainer.scrollHeight;
 
       const trimmed = fullSummary.trim();
       const wordCount = trimmed ? trimmed.split(/\s+/).length : 0;
       summaryBadge.textContent = `${wordCount} words · ${currentType} · ${currentLength}`;
 
       if (fullSummary.length - previousLength > 20) {
-        setStatus(`Generating summary... (${wordCount} words)`, 'notice');
+        setStatus(`Generating... ${wordCount} words so far`, 'notice', true);
         previousLength = fullSummary.length;
       }
     }
@@ -526,7 +569,7 @@ const handleSummarize = async () => {
     // Display and save the final summary
     displaySummary(fullSummary, currentType, currentLength);
     await saveSummary(fullSummary, currentType, currentLength);
-    setStatus('Summary complete.', 'info');
+    setStatus('✓ Summary complete.', 'info', false);
 
     // Clean up
     summarizer.destroy();
@@ -550,8 +593,8 @@ resetButton.addEventListener('click', async () => {
   try {
     await ensureContentScript(currentTabId);
     resetButton.disabled = true;
+    setStatus('Resetting…', 'notice', true);
     await sendMessageToTab(currentTabId, { type: COMMAND_TYPES.RESET });
-    setStatus('Clearing exclusions…', 'notice');
     
     // Clear stored summary when resetting
     const key = `summary_${currentTabId}`;
@@ -564,9 +607,11 @@ resetButton.addEventListener('click', async () => {
     summaryContainer.textContent = '';
     summarySection.hidden = true;
     summaryBadge.textContent = '';
+    
+    setStatus('✓ Reset complete.', 'info', false);
   } catch (error) {
     console.error(error);
-    setStatus(error.message || 'Unable to reset exclusions.', 'error');
+    setStatus(error.message || 'Unable to reset.', 'error', false);
   }
 });
 copyButton.addEventListener('click', handleCopy);

@@ -124,6 +124,7 @@ button:disabled {
   white-space: pre-wrap;
   line-height: 1.5;
   font-size: 13px;
+  scroll-behavior: smooth;
 }
 
 .exclusions {
@@ -233,6 +234,22 @@ body.selection-preview {
   content: "No summary generated yet.";
   color: #6c757d;
   font-style: italic;
+}
+
+/* Hide text section initially until text is extracted */
+.content-section.text-section.empty {
+  display: none;
+}
+
+/* Status indicator enhancements */
+.status.streaming {
+  font-weight: 500;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
 }
 
 select {
