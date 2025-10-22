@@ -19,9 +19,39 @@
     <button id="copy-btn" type="button" disabled>Copy All</button>
     <button id="download-btn" type="button" disabled>Download .txt</button>
   </section>
+  <section class="summarizer-controls">
+    <button id="summarize-btn" type="button" disabled>Summarize</button>
+    <select id="summary-type">
+      <option value="tldr">TL;DR</option>
+      <option value="teaser">Teaser</option>
+      <option value="key-points" selected>Key Points</option>
+      <option value="headline">Headline</option>
+    </select>
+    <select id="summary-length">
+      <option value="short">Short</option>
+      <option value="medium">Medium</option>
+      <option value="long" selected>Long</option>
+    </select>
+  </section>
   <p id="status" class="status" role="status" aria-live="polite"></p>
   <p id="count" class="count"></p>
-  <div id="text-container" class="text-container" tabindex="0" aria-label="Extracted page text"></div>
+  
+  <section class="content-section">
+    <h2>
+      Extracted Text
+      <span class="badge" id="text-badge"></span>
+    </h2>
+    <div id="text-container" class="text-container" tabindex="0" aria-label="Extracted page text"></div>
+  </section>
+  
+  <section class="content-section" id="summary-section" hidden>
+    <h2>
+      Summary
+      <span class="badge" id="summary-badge"></span>
+    </h2>
+    <div id="summary-container" class="text-container" tabindex="0" aria-label="Summary"></div>
+  </section>
+  
   <section id="exclusion-section" class="exclusions" hidden>
     <h2>Excluded Elements</h2>
     <ul id="exclusion-list"></ul>

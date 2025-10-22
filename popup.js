@@ -3,7 +3,14 @@ const refineButton = document.getElementById('refine-btn');
 const resetButton = document.getElementById('reset-btn');
 const copyButton = document.getElementById('copy-btn');
 const downloadButton = document.getElementById('download-btn');
+const summarizeButton = document.getElementById('summarize-btn');
+const summaryType = document.getElementById('summary-type');
+const summaryLength = document.getElementById('summary-length');
+const summaryContainer = document.getElementById('summary-container');
+const summarySection = document.getElementById('summary-section');
+const summaryBadge = document.getElementById('summary-badge');
 const textContainer = document.getElementById('text-container');
+const textBadge = document.getElementById('text-badge');
 const metadataElement = document.getElementById('metadata');
 const statusElement = document.getElementById('status');
 const countElement = document.getElementById('count');
@@ -39,6 +46,9 @@ const MINIMIZED_HEIGHT = 120;
 
 let latestText = '';
 let latestExcludedCount = 0;
+let latestSummary = '';
+let latestSummaryType = '';
+let latestSummaryLength = '';
 let selectionActive = false;
 let currentTabId = null;
 let minimized = false;
@@ -184,8 +194,18 @@ const populateText = ({ text, title, url, excludedCount = 0, excluded = [] }) =>
   updateCounts(latestText, excludedCount);
   renderExclusions(excluded);
   const hasText = latestText.length > 0;
+  
+  // Update text badge
+  if (hasText) {
+    const wordCount = latestText.trim().split(/\s+/).length;
+    textBadge.textContent = `${wordCount} words`;
+  } else {
+    textBadge.textContent = '';
+  }
+  
   copyButton.disabled = !hasText;
   downloadButton.disabled = !hasText;
+  summarizeButton.disabled = !hasText;
   resetButton.disabled = excludedCount === 0;
   refineButton.disabled = !hasText && !selectionActive;
   if (!selectionActive) {
@@ -197,11 +217,32 @@ const populateText = ({ text, title, url, excludedCount = 0, excluded = [] }) =>
   }
 };
 
-const extractPageText = async () => {
+const extractPageText = async (clearSummary = true) => {
   copyButton.disabled = true;
   downloadButton.disabled = true;
+  summarizeButton.disabled = true;
   refineButton.disabled = true;
   resetButton.disabled = true;
+  
+  // Clear old summary when extracting new text (but not on initial load)
+  if (clearSummary) {
+    latestSummary = '';
+    latestSummaryType = '';
+    latestSummaryLength = '';
+    summaryContainer.textContent = '';
+    summarySection.hidden = true;
+    summaryBadge.textContent = '';
+    
+    // Clear stored summary
+    try {
+      const tab = await getActiveTab();
+      const key = `summary_${tab.id}`;
+      await chrome.storage.local.remove(key);
+    } catch (error) {
+      console.warn('Failed to clear summary:', error);
+    }
+  }
+  
   setStatus('Extracting…', 'notice');
   try {
     const tab = await getActiveTab();
@@ -228,6 +269,7 @@ const updateSelectionUI = (active) => {
     minimizePopup();
     copyButton.disabled = true;
     downloadButton.disabled = true;
+    summarizeButton.disabled = true;
     resetButton.disabled = true;
     setStatus('Selection mode active. Hover an element and click to exclude. Press Esc to cancel.', 'notice');
   } else {
@@ -236,6 +278,7 @@ const updateSelectionUI = (active) => {
     restorePopup(true);
     copyButton.disabled = !latestText;
     downloadButton.disabled = !latestText;
+    summarizeButton.disabled = !latestText;
     resetButton.disabled = latestExcludedCount === 0;
   }
 };
@@ -360,8 +403,109 @@ const handleDownload = () => {
   setStatus('Download ready.', 'info');
 };
 
+const saveSummary = async (summary, type, length) => {
+  try {
+    const tab = await getActiveTab();
+    const key = `summary_${tab.id}`;
+    await chrome.storage.local.set({
+      [key]: {
+        summary,
+        type,
+        length,
+        timestamp: Date.now()
+      }
+    });
+  } catch (error) {
+    console.warn('Failed to save summary:', error);
+  }
+};
+
+const loadSummary = async () => {
+  try {
+    const tab = await getActiveTab();
+    const key = `summary_${tab.id}`;
+    const result = await chrome.storage.local.get(key);
+    if (result[key]) {
+      return result[key];
+    }
+  } catch (error) {
+    console.warn('Failed to load summary:', error);
+  }
+  return null;
+};
+
+const displaySummary = (summary, type, length) => {
+  latestSummary = summary;
+  latestSummaryType = type;
+  latestSummaryLength = length;
+  summaryContainer.textContent = summary;
+  summarySection.hidden = false;
+  
+  // Update summary badge
+  const wordCount = summary.trim().split(/\s+/).length;
+  summaryBadge.textContent = `${wordCount} words · ${type} · ${length}`;
+};
+
+const handleSummarize = async () => {
+  if (!latestText) {
+    return;
+  }
+  summarizeButton.disabled = true;
+  setStatus('Summarizing...', 'notice');
+  try {
+    // Check if the Summarizer API is available
+    if (typeof self.Summarizer === 'undefined') {
+      throw new Error('Summarizer API is not available in this browser.');
+    }
+
+    // Check availability
+    const availability = await self.Summarizer.availability();
+    if (availability === 'no') {
+      throw new Error('Summarizer API is not available on this device.');
+    }
+
+    // Create summarizer options
+    const currentType = summaryType.value;
+    const currentLength = summaryLength.value;
+    const options = {
+      type: currentType,
+      length: currentLength,
+      format: 'plain-text'
+    };
+
+    // Add download progress monitor if model needs downloading
+    if (availability === 'after-download') {
+      options.monitor = (m) => {
+        m.addEventListener('downloadprogress', (e) => {
+          setStatus(`Downloading model: ${Math.round(e.loaded * 100)}%`, 'notice');
+        });
+      };
+    }
+
+    // Create the summarizer
+    const summarizer = await self.Summarizer.create(options);
+
+    // Generate summary
+    setStatus('Generating summary...', 'notice');
+    const summary = await summarizer.summarize(latestText);
+    
+    // Display and save the summary
+    displaySummary(summary, currentType, currentLength);
+    await saveSummary(summary, currentType, currentLength);
+    setStatus('Summary complete.', 'info');
+    
+    // Clean up
+    summarizer.destroy();
+  } catch (error) {
+    console.error(error);
+    setStatus(error.message || 'Failed to summarize.', 'error');
+  } finally {
+    summarizeButton.disabled = !latestText;
+  }
+};
+
 chrome.runtime.onMessage.addListener(handleMessage);
-extractButton.addEventListener('click', extractPageText);
+extractButton.addEventListener('click', () => extractPageText(true));
 refineButton.addEventListener('click', toggleSelectionMode);
 resetButton.addEventListener('click', async () => {
   if (!currentTabId) {
@@ -373,6 +517,18 @@ resetButton.addEventListener('click', async () => {
     resetButton.disabled = true;
     await sendMessageToTab(currentTabId, { type: COMMAND_TYPES.RESET });
     setStatus('Clearing exclusions…', 'notice');
+    
+    // Clear stored summary when resetting
+    const key = `summary_${currentTabId}`;
+    await chrome.storage.local.remove(key);
+    
+    // Clear summary UI
+    latestSummary = '';
+    latestSummaryType = '';
+    latestSummaryLength = '';
+    summaryContainer.textContent = '';
+    summarySection.hidden = true;
+    summaryBadge.textContent = '';
   } catch (error) {
     console.error(error);
     setStatus(error.message || 'Unable to reset exclusions.', 'error');
@@ -380,6 +536,18 @@ resetButton.addEventListener('click', async () => {
 });
 copyButton.addEventListener('click', handleCopy);
 downloadButton.addEventListener('click', handleDownload);
+summarizeButton.addEventListener('click', handleSummarize);
 
-// Auto-trigger extraction when the popup opens for convenience.
-extractPageText();
+// Initialize: restore saved summary and auto-trigger extraction
+const initializePopup = async () => {
+  // Try to load saved summary first
+  const savedSummary = await loadSummary();
+  if (savedSummary && savedSummary.summary) {
+    displaySummary(savedSummary.summary, savedSummary.type, savedSummary.length);
+  }
+  
+  // Auto-trigger extraction (without clearing the restored summary)
+  extractPageText(false);
+};
+
+initializePopup();
