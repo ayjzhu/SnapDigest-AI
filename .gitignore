@@ -1,0 +1,73 @@
+# ===============================
+# macOS system files
+# ===============================
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+__MACOSX/
+
+# ===============================
+# Node / npm
+# ===============================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ===============================
+# Build output / dist
+# ===============================
+dist/
+build/
+bundle/
+coverage/
+.tmp/
+.cache/
+out/
+
+# ===============================
+# Chrome extension specific
+# ===============================
+# Extension build outputs or temporary packaging files
+*.crx
+*.pem
+*.zip
+*.log
+manifest.v3.backup.json
+chrome-profile/
+chrome-extension-keys/
+
+# ===============================
+# Editor / IDE configs
+# ===============================
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+*.code-workspace
+
+# ===============================
+# OS and misc
+# ===============================
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*.lnk
+
+# ===============================
+# Env and credentials
+# ===============================
+.env
+.env.local
+.env.development
+.env.production
+credentials.json
+secrets.json
+api_keys.json
