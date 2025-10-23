@@ -3,7 +3,15 @@ const refineButton = document.getElementById('refine-btn');
 const resetButton = document.getElementById('reset-btn');
 const copyButton = document.getElementById('copy-btn');
 const downloadButton = document.getElementById('download-btn');
+const summarizeButton = document.getElementById('summarize-btn');
+const summaryType = document.getElementById('summary-type');
+const summaryLength = document.getElementById('summary-length');
+const summaryContainer = document.getElementById('summary-container');
+const summarySection = document.getElementById('summary-section');
+const summaryBadge = document.getElementById('summary-badge');
 const textContainer = document.getElementById('text-container');
+const textSection = document.getElementById('text-section');
+const textBadge = document.getElementById('text-badge');
 const metadataElement = document.getElementById('metadata');
 const statusElement = document.getElementById('status');
 const countElement = document.getElementById('count');
@@ -39,6 +47,9 @@ const MINIMIZED_HEIGHT = 120;
 
 let latestText = '';
 let latestExcludedCount = 0;
+let latestSummary = '';
+let latestSummaryType = '';
+let latestSummaryLength = '';
 let selectionActive = false;
 let currentTabId = null;
 let minimized = false;
@@ -47,9 +58,10 @@ let pendingPreview = false;
 
 const PREVIEW_DURATION_MS = 1700;
 
-const setStatus = (message, tone = 'info') => {
+const setStatus = (message, tone = 'info', streaming = false) => {
   statusElement.textContent = message || '';
   statusElement.style.color = STATUS_COLORS[tone] || STATUS_COLORS.info;
+  statusElement.classList.toggle('streaming', streaming);
 };
 
 const getActiveTab = () =>
@@ -184,8 +196,25 @@ const populateText = ({ text, title, url, excludedCount = 0, excluded = [] }) =>
   updateCounts(latestText, excludedCount);
   renderExclusions(excluded);
   const hasText = latestText.length > 0;
+  
+  // Show/hide text section based on content
+  if (hasText) {
+    textSection.classList.remove('empty');
+  } else {
+    textSection.classList.add('empty');
+  }
+  
+  // Update text badge
+  if (hasText) {
+    const wordCount = latestText.trim().split(/\s+/).length;
+    textBadge.textContent = `${wordCount} words`;
+  } else {
+    textBadge.textContent = '';
+  }
+  
   copyButton.disabled = !hasText;
   downloadButton.disabled = !hasText;
+  summarizeButton.disabled = !hasText;
   resetButton.disabled = excludedCount === 0;
   refineButton.disabled = !hasText && !selectionActive;
   if (!selectionActive) {
@@ -197,11 +226,32 @@ const populateText = ({ text, title, url, excludedCount = 0, excluded = [] }) =>
   }
 };
 
-const extractPageText = async () => {
+const extractPageText = async (clearSummary = true) => {
   copyButton.disabled = true;
   downloadButton.disabled = true;
+  summarizeButton.disabled = true;
   refineButton.disabled = true;
   resetButton.disabled = true;
+  
+  // Clear old summary when extracting new text (but not on initial load)
+  if (clearSummary) {
+    latestSummary = '';
+    latestSummaryType = '';
+    latestSummaryLength = '';
+    summaryContainer.textContent = '';
+    summarySection.hidden = true;
+    summaryBadge.textContent = '';
+    
+    // Clear stored summary
+    try {
+      const tab = await getActiveTab();
+      const key = `summary_${tab.id}`;
+      await chrome.storage.local.remove(key);
+    } catch (error) {
+      console.warn('Failed to clear summary:', error);
+    }
+  }
+  
   setStatus('Extracting…', 'notice');
   try {
     const tab = await getActiveTab();
@@ -228,6 +278,7 @@ const updateSelectionUI = (active) => {
     minimizePopup();
     copyButton.disabled = true;
     downloadButton.disabled = true;
+    summarizeButton.disabled = true;
     resetButton.disabled = true;
     setStatus('Selection mode active. Hover an element and click to exclude. Press Esc to cancel.', 'notice');
   } else {
@@ -236,6 +287,7 @@ const updateSelectionUI = (active) => {
     restorePopup(true);
     copyButton.disabled = !latestText;
     downloadButton.disabled = !latestText;
+    summarizeButton.disabled = !latestText;
     resetButton.disabled = latestExcludedCount === 0;
   }
 };
@@ -360,8 +412,178 @@ const handleDownload = () => {
   setStatus('Download ready.', 'info');
 };
 
+const saveSummary = async (summary, type, length) => {
+  try {
+    const tab = await getActiveTab();
+    const key = `summary_${tab.id}`;
+    await chrome.storage.local.set({
+      [key]: {
+        summary,
+        type,
+        length,
+        timestamp: Date.now()
+      }
+    });
+  } catch (error) {
+    console.warn('Failed to save summary:', error);
+  }
+};
+
+const loadSummary = async () => {
+  try {
+    const tab = await getActiveTab();
+    const key = `summary_${tab.id}`;
+    const result = await chrome.storage.local.get(key);
+    if (result[key]) {
+      return result[key];
+    }
+  } catch (error) {
+    console.warn('Failed to load summary:', error);
+  }
+  return null;
+};
+
+const displaySummary = (summary, type, length) => {
+  latestSummary = summary;
+  latestSummaryType = type;
+  latestSummaryLength = length;
+  summaryContainer.textContent = summary;
+  summarySection.hidden = false;
+  
+  // Update summary badge
+  const wordCount = summary.trim().split(/\s+/).length;
+  summaryBadge.textContent = `${wordCount} words · ${type} · ${length}`;
+};
+
+// Determine a supported output language for the Summarizer API.
+// The API currently supports a limited set; prefer the user's UI language,
+// falling back to English.
+const getPreferredOutputLanguage = () => {
+  const supported = ['en', 'es', 'ja'];
+  const candidates = [];
+  const docLang = (document.documentElement.getAttribute('lang') || '').toLowerCase();
+  if (docLang) candidates.push(docLang);
+  if (Array.isArray(navigator.languages)) {
+    candidates.push(...navigator.languages.map((l) => String(l).toLowerCase()));
+  }
+  if (navigator.language) {
+    candidates.push(String(navigator.language).toLowerCase());
+  }
+  for (const cand of candidates) {
+    const hit = supported.find((code) => cand.startsWith(code));
+    if (hit) return hit;
+  }
+  return 'en';
+};
+
+const handleSummarize = async () => {
+  if (!latestText) {
+    return;
+  }
+  summarizeButton.disabled = true;
+  setStatus('Preparing to summarize...', 'notice', true);
+  
+  // Clear previous summary and show section
+  summaryContainer.textContent = '';
+  summarySection.hidden = false;
+  summaryBadge.textContent = 'generating...';
+  
+  // Scroll summary section into view
+  setTimeout(() => {
+    summarySection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 100);
+  
+  try {
+    // Check if the Summarizer API is available
+    if (typeof self.Summarizer === 'undefined') {
+      throw new Error('Summarizer API is not available in this browser.');
+    }
+
+    // Check availability
+    const availability = await self.Summarizer.availability();
+    if (availability === 'no') {
+      throw new Error('Summarizer API is not available on this device.');
+    }
+
+    // Create summarizer options
+    const currentType = summaryType.value;
+    const currentLength = summaryLength.value;
+    const preferredLanguage = getPreferredOutputLanguage();
+    const options = {
+      type: currentType,
+      length: currentLength,
+      format: 'plain-text',
+      sharedContext: '',
+      outputLanguage: preferredLanguage
+    };
+
+    // Add download progress monitor if model needs downloading
+    if (availability === 'after-download') {
+      options.monitor = (m) => {
+        m.addEventListener('downloadprogress', (e) => {
+          setStatus(`Downloading model: ${Math.round(e.loaded * 100)}%`, 'notice', true);
+        });
+      };
+    }
+
+    // Create the summarizer
+    const summarizer = await self.Summarizer.create(options);
+
+    // Generate streaming summary
+    setStatus('Generating summary...', 'notice', true);
+    const stream = await summarizer.summarizeStreaming(latestText, {
+      context: ''
+    });
+
+    let fullSummary = '';
+    let previousLength = 0;
+
+    for await (const chunk of stream) {
+      // Chrome may yield either incremental deltas or the full text-so-far.
+      const piece = typeof chunk === 'string'
+        ? chunk
+        : (chunk?.text ?? chunk?.content ?? String(chunk ?? ''));
+
+      // If piece already contains the accumulated text, treat it as full text-so-far.
+      if (piece.startsWith(fullSummary)) {
+        fullSummary = piece;
+      } else {
+        fullSummary += piece;
+      }
+
+      summaryContainer.textContent = fullSummary;
+      
+      // Auto-scroll to bottom of summary container as text grows
+      summaryContainer.scrollTop = summaryContainer.scrollHeight;
+
+      const trimmed = fullSummary.trim();
+      const wordCount = trimmed ? trimmed.split(/\s+/).length : 0;
+      summaryBadge.textContent = `${wordCount} words · ${currentType} · ${currentLength}`;
+
+      if (fullSummary.length - previousLength > 20) {
+        setStatus(`Generating... ${wordCount} words so far`, 'notice', true);
+        previousLength = fullSummary.length;
+      }
+    }
+
+    // Display and save the final summary
+    displaySummary(fullSummary, currentType, currentLength);
+    await saveSummary(fullSummary, currentType, currentLength);
+    setStatus('✓ Summary complete.', 'info', false);
+
+    // Clean up
+    summarizer.destroy();
+  } catch (error) {
+    console.error('Summarization error:', error);
+    setStatus(error.message || 'Failed to summarize.', 'error');
+    // Keep whatever partial summary we have visible for the user.
+  } finally {
+    summarizeButton.disabled = !latestText;
+  }
+};
+
 chrome.runtime.onMessage.addListener(handleMessage);
-extractButton.addEventListener('click', extractPageText);
+extractButton.addEventListener('click', () => extractPageText(true));
 refineButton.addEventListener('click', toggleSelectionMode);
 resetButton.addEventListener('click', async () => {
   if (!currentTabId) {
@@ -371,15 +593,41 @@ resetButton.addEventListener('click', async () => {
   try {
     await ensureContentScript(currentTabId);
     resetButton.disabled = true;
+    setStatus('Resetting…', 'notice', true);
     await sendMessageToTab(currentTabId, { type: COMMAND_TYPES.RESET });
-    setStatus('Clearing exclusions…', 'notice');
+    
+    // Clear stored summary when resetting
+    const key = `summary_${currentTabId}`;
+    await chrome.storage.local.remove(key);
+    
+    // Clear summary UI
+    latestSummary = '';
+    latestSummaryType = '';
+    latestSummaryLength = '';
+    summaryContainer.textContent = '';
+    summarySection.hidden = true;
+    summaryBadge.textContent = '';
+    
+    setStatus('✓ Reset complete.', 'info', false);
   } catch (error) {
     console.error(error);
-    setStatus(error.message || 'Unable to reset exclusions.', 'error');
+    setStatus(error.message || 'Unable to reset.', 'error', false);
   }
 });
 copyButton.addEventListener('click', handleCopy);
 downloadButton.addEventListener('click', handleDownload);
+summarizeButton.addEventListener('click', handleSummarize);
 
-// Auto-trigger extraction when the popup opens for convenience.
-extractPageText();
+// Initialize: restore saved summary and auto-trigger extraction
+const initializePopup = async () => {
+  // Try to load saved summary first
+  const savedSummary = await loadSummary();
+  if (savedSummary && savedSummary.summary) {
+    displaySummary(savedSummary.summary, savedSummary.type, savedSummary.length);
+  }
+  
+  // Auto-trigger extraction (without clearing the restored summary)
+  extractPageText(false);
+};
+
+initializePopup();
