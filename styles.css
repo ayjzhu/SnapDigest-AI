@@ -206,6 +206,34 @@ body.selection-preview {
   gap: 12px;
 }
 
+/* Collapsible sections */
+.collapsible h2 {
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.collapsible h2:hover {
+  background: #f1f3f5;
+}
+
+.collapsible h2::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  color: #6c757d;
+  transform: translateY(1px);
+}
+
+.collapsible:not(.collapsed) h2::before {
+  content: '▾';
+  color: #495057;
+}
+
+.collapsible.collapsed > :not(h2) {
+  display: none !important;
+}
+
 .summarizer-controls {
   display: flex;
   gap: 8px;

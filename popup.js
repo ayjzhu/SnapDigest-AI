@@ -19,6 +19,45 @@ const exclusionSection = document.getElementById('exclusion-section');
 const exclusionList = document.getElementById('exclusion-list');
 const selectionBadge = document.getElementById('selection-badge');
 
+// Collapsible controls
+let collapseControllers = { text: null, summary: null, exclusion: null };
+
+const makeCollapsible = (section, defaultCollapsed = false) => {
+  if (!section) return null;
+  section.classList.add('collapsible');
+  const header = section.querySelector('h2');
+  if (!header) return null;
+  header.setAttribute('role', 'button');
+  header.tabIndex = 0;
+  header.title = 'Click to expand/collapse';
+  const setExpanded = (expanded) => {
+    section.classList.toggle('collapsed', !expanded);
+    header.setAttribute('aria-expanded', String(expanded));
+  };
+  const toggle = () => setExpanded(section.classList.contains('collapsed'));
+  header.addEventListener('click', toggle);
+  header.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggle();
+    }
+  });
+  setExpanded(!defaultCollapsed);
+  return { setExpanded };
+};
+
+const focusSection = (targetSection) => {
+  if (collapseControllers.text) {
+    collapseControllers.text.setExpanded(targetSection === textSection);
+  }
+  if (collapseControllers.summary) {
+    collapseControllers.summary.setExpanded(targetSection === summarySection);
+  }
+  if (collapseControllers.exclusion) {
+    collapseControllers.exclusion.setExpanded(targetSection === exclusionSection);
+  }
+};
+
 const MESSAGE_TYPES = {
   TEXT: 'PAGE_TEXT_RESULT',
   SELECTION_STATUS: 'PTS_SELECTION_STATUS',
@@ -224,6 +263,13 @@ const populateText = ({ text, title, url, excludedCount = 0, excluded = [] }) =>
     setStatus('Extraction complete.');
     restorePopup(true);
   }
+};
+
+const setupCollapsibleSections = () => {
+  // Initialize collapsible behavior
+  collapseControllers.text = makeCollapsible(textSection, false);
+  collapseControllers.summary = makeCollapsible(summarySection, true);
+  collapseControllers.exclusion = makeCollapsible(exclusionSection, true);
 };
 
 const extractPageText = async (clearSummary = true) => {
@@ -488,6 +534,9 @@ const handleSummarize = async () => {
   summarySection.hidden = false;
   summaryBadge.textContent = 'generating...';
   
+  // Focus summary and minimize other sections
+  focusSection(summarySection);
+  
   // Scroll summary section into view
   setTimeout(() => {
     summarySection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -620,6 +669,9 @@ summarizeButton.addEventListener('click', handleSummarize);
 
 // Initialize: restore saved summary and auto-trigger extraction
 const initializePopup = async () => {
+  // Setup collapsible sections
+  setupCollapsibleSections();
+  
   // Try to load saved summary first
   const savedSummary = await loadSummary();
   if (savedSummary && savedSummary.summary) {
