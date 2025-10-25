@@ -13,6 +13,8 @@ const textContainer = document.getElementById('text-container');
 const textSection = document.getElementById('text-section');
 const textBadge = document.getElementById('text-badge');
 const metadataElement = document.getElementById('metadata');
+const bentoButton = document.getElementById('bento-btn');
+const bentoLink = document.getElementById('bento-link');
 const statusElement = document.getElementById('status');
 const countElement = document.getElementById('count');
 const exclusionSection = document.getElementById('exclusion-section');
@@ -78,6 +80,55 @@ const STATUS_COLORS = {
   notice: '#2563eb'
 };
 
+const BENTO_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    header: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        subtitle: { type: 'string' },
+        cta: {
+          type: 'object',
+          properties: {
+            label: { type: 'string' },
+            url: { type: 'string' }
+          },
+          required: ['label', 'url']
+        }
+      },
+      required: ['title', 'subtitle']
+    },
+    cards: {
+      type: 'array',
+      minItems: 4,
+      maxItems: 10,
+      items: {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['lead', 'takeaway', 'stat', 'quote', 'list', 'links', 'tip'] },
+          title: { type: 'string' },
+          body: { type: 'string' },
+          bullets: { type: 'array', items: { type: 'string' } },
+          tag: { type: 'string' },
+          progressLabelLeft: { type: 'string' },
+          progressLabelRight: { type: 'string' },
+          progressLeftPct: { type: 'number', minimum: 0, maximum: 100 },
+          progressRightPct: { type: 'number', minimum: 0, maximum: 100 },
+          size: { type: 'string', enum: ['s', 'm', 'l'] },
+          emphasis: { type: 'string', enum: ['default', 'accent', 'dark'] },
+          sourceAnchors: { type: 'array', items: { type: 'string' } }
+        },
+        required: ['kind', 'title', 'size']
+      }
+    }
+  },
+  required: ['header', 'cards']
+};
+
+const BENTO_BUTTON_LABEL_DEFAULT = (bentoButton?.textContent || 'Render Bento Grid').trim();
+const BENTO_BUTTON_LABEL_WORKING = 'Rendering…';
+
 const injectedTabs = new Set();
 const fallbackWidth = Math.max(360, (window.outerWidth || document.documentElement.offsetWidth || 320) + 40);
 const fallbackHeight = Math.max(260, (window.outerHeight || document.documentElement.offsetHeight || 320) + 40);
@@ -94,6 +145,10 @@ let currentTabId = null;
 let minimized = false;
 let previewTimer = null;
 let pendingPreview = false;
+let latestArticleTitle = '';
+let latestArticleUrl = '';
+let latestBentoKey = '';
+let bentoInProgress = false;
 
 const PREVIEW_DURATION_MS = 1700;
 
@@ -101,6 +156,301 @@ const setStatus = (message, tone = 'info', streaming = false) => {
   statusElement.textContent = message || '';
   statusElement.style.color = STATUS_COLORS[tone] || STATUS_COLORS.info;
   statusElement.classList.toggle('streaming', streaming);
+};
+
+const getLanguageModelApi = () => {
+  // Check for the LanguageModel API (latest Chrome API)
+  if (typeof self.LanguageModel !== 'undefined') {
+    return self.LanguageModel;
+  }
+  // Fallback to older API patterns
+  if (self?.ai?.languageModel) {
+    return self.ai.languageModel;
+  }
+  if (window?.ai?.languageModel) {
+    return window.ai.languageModel;
+  }
+  if (chrome?.ai?.languageModel) {
+    return chrome.ai.languageModel;
+  }
+  if (globalThis?.ai?.languageModel) {
+    return globalThis.ai.languageModel;
+  }
+  return null;
+};
+
+const getSiteNameFromUrl = (url = '') => {
+  if (!url) {
+    return '';
+  }
+  try {
+    const hostname = new URL(url).hostname || '';
+    return hostname.replace(/^www\./i, '');
+  } catch {
+    return '';
+  }
+};
+
+const getArticleMeta = () => {
+  const url = latestArticleUrl || '';
+  return {
+    title: latestArticleTitle || '',
+    url,
+    siteName: getSiteNameFromUrl(url)
+  };
+};
+
+const deriveSummaryForPrompt = () => {
+  const summaryText = (latestSummary || '').trim();
+  const normalized = summaryText.replace(/\r\n/g, '\n');
+  const bulletCandidates = normalized
+    .split('\n')
+    .map((line) => line.replace(/^[\s•*-]+/, '').trim())
+    .filter(Boolean);
+  const sentenceCandidates = summaryText
+    ? summaryText
+        .replace(/\s+/g, ' ')
+        .split(/(?<=[.!?])\s+/)
+        .map((segment) => segment.trim())
+        .filter(Boolean)
+    : [];
+  const fallbackHeadline = sentenceCandidates[0] || bulletCandidates[0] || latestArticleTitle || 'Article digest';
+  const abstract = sentenceCandidates.slice(0, 2).join(' ') || summaryText || fallbackHeadline;
+  let bullets = bulletCandidates;
+  if (!bullets.length) {
+    bullets = sentenceCandidates;
+  }
+  if (!bullets.length && summaryText) {
+    bullets = [summaryText];
+  }
+  return {
+    headline: fallbackHeadline,
+    abstract,
+    bullets: bullets.slice(0, 8),
+    quotes: [],
+    stats: [],
+    links: []
+  };
+};
+
+const formatArrayForPrompt = (value) => {
+  if (Array.isArray(value) && value.length) {
+    return JSON.stringify(value);
+  }
+  return '[]';
+};
+
+const buildBentoPrompt = (articleMeta, summaryBundle) => `System:
+You are a UI content composer. Produce compact, factual bento cards from a news/blog article.
+Return strictly VALID JSON matching the provided JSON Schema. No markdown. No extra keys.
+
+User:
+Here is the article context:
+- Title: ${articleMeta.title || 'Unknown'}
+- URL: ${articleMeta.url || 'Unknown'}
+- Domain: ${articleMeta.siteName || 'Unknown'}
+
+Summaries to use (already computed by the Summarizer API):
+- Headline: ${summaryBundle.headline || ''}
+- One-sentence abstract: ${summaryBundle.abstract || ''}
+- Key bullets (≤8): ${formatArrayForPrompt(summaryBundle.bullets)}
+- Notable quotes (speaker + quote): ${formatArrayForPrompt(summaryBundle.quotes)}
+- Important numbers (label + value + unit): ${formatArrayForPrompt(summaryBundle.stats)}
+- Relevant links (label + url): ${formatArrayForPrompt(summaryBundle.links)}
+
+Task:
+1) Create a concise header:
+   - title: a crisp 4–8 word headline using the article’s topic.
+   - subtitle: a single informative line (≤22 words).
+   - cta: label "Read original" and url = ${articleMeta.url || 'Unknown'}.
+
+2) Create 6–8 cards balancing these kinds:
+   - lead (1): the big idea; use size "l".
+   - takeaway (2–3): key ideas; size "m" or "s".
+   - stat (1): one or two metrics; may use progress bars if comparative % available.
+   - quote (0–1): one impactful quotation with attribution in body.
+   - list or links (1): short bullet list (3–6 bullets) or curated links.
+
+3) Populate fields:
+   - title: ≤ 60 chars.
+   - body: ≤ 220 chars, plain text.
+   - bullets: optional, 3–6 items, short.
+   - tag: 1–2 word category (e.g., “Overview”, “Impact”, “Market”).
+   - size: s/m/l per layout guidelines.
+   - emphasis: "default", "accent" for a highlight, or "dark" for contrast.
+   - For a comparative stat, include progressLabelLeft/Right and progressLeftPct/progressRightPct.
+
+4) Output strictly valid JSON that matches the schema. No commentary.`;
+
+const normalizeBentoResponse = (raw) => {
+  if (!raw) {
+    throw new Error('Prompt API returned no data.');
+  }
+  if (typeof raw === 'string') {
+    return JSON.parse(raw);
+  }
+  if (typeof raw === 'object') {
+    if ('output' in raw) {
+      const output = raw.output;
+      if (typeof output === 'string') {
+        return JSON.parse(output);
+      }
+      if (output && typeof output === 'object') {
+        return output;
+      }
+    }
+    return raw;
+  }
+  throw new Error('Unexpected Prompt API response.');
+};
+
+const clearBentoState = (removeStored = false) => {
+  latestBentoKey = '';
+  if (bentoLink) {
+    bentoLink.hidden = true;
+    bentoLink.removeAttribute('href');
+  }
+  if (removeStored && currentTabId) {
+    const key = `bento_${currentTabId}`;
+    chrome.storage.local.remove(key).catch(() => {});
+  }
+};
+
+const refreshBentoControls = () => {
+  if (!bentoButton) {
+    return;
+  }
+  if (bentoInProgress) {
+    bentoButton.disabled = true;
+    return;
+  }
+  const hasSummary = Boolean(latestSummary && latestSummary.trim().length);
+  bentoButton.disabled = !hasSummary;
+  if (!hasSummary) {
+    clearBentoState(true);
+  }
+};
+
+const setBentoButtonState = (inProgress) => {
+  if (!bentoButton) {
+    return;
+  }
+  bentoInProgress = inProgress;
+  bentoButton.textContent = inProgress ? BENTO_BUTTON_LABEL_WORKING : BENTO_BUTTON_LABEL_DEFAULT;
+  if (inProgress) {
+    bentoButton.disabled = true;
+  } else {
+    refreshBentoControls();
+  }
+};
+
+const ensureCurrentTab = async () => {
+  if (currentTabId) {
+    return currentTabId;
+  }
+  const tab = await getActiveTab();
+  currentTabId = tab.id;
+  return currentTabId;
+};
+
+const generateBentoLayout = async (articleMeta, summaryBundle) => {
+  const languageModelApi = getLanguageModelApi();
+  if (!languageModelApi) {
+    throw new Error('Prompt API is not available in this browser. Please ensure you are using Chrome 127+ with the AI features enabled.');
+  }
+  
+  // Check availability using the correct API method
+  let availability = 'readily';
+  if (typeof languageModelApi.availability === 'function') {
+    try {
+      availability = await languageModelApi.availability();
+    } catch (error) {
+      console.warn('Language Model availability check failed:', error);
+      throw new Error('Unable to check Prompt API availability. Please ensure you have enabled the AI features in Chrome.');
+    }
+  }
+  
+  if (availability === 'no') {
+    throw new Error('Prompt API is not available on this device. Your device may not meet the hardware requirements.');
+  }
+  
+  const createOptions = {
+    temperature: 0.2,
+    topK: 1,
+    maxOutputTokens: 2048
+  };
+  
+  if (availability === 'after-download' || availability === 'downloadable') {
+    createOptions.monitor = (monitor) => {
+      monitor.addEventListener('downloadprogress', (event) => {
+        if (typeof event.loaded === 'number') {
+          setStatus(`Downloading model: ${Math.round(event.loaded * 100)}%`, 'notice', true);
+        }
+      });
+    };
+  }
+  
+  const session = await languageModelApi.create(createOptions);
+  try {
+    const prompt = buildBentoPrompt(articleMeta, summaryBundle);
+    const response = await session.prompt(prompt, { responseConstraint: BENTO_JSON_SCHEMA });
+    const parsed = normalizeBentoResponse(response);
+    if (!parsed || !parsed.header || !Array.isArray(parsed.cards)) {
+      throw new Error('Prompt API returned incomplete Bento data.');
+    }
+    return parsed;
+  } finally {
+    if (typeof session.destroy === 'function') {
+      session.destroy();
+    }
+  }
+};
+
+const handleGenerateBento = async () => {
+  if (!latestSummary || !latestSummary.trim()) {
+    setStatus('Generate a summary before rendering the Bento view.', 'notice');
+    return;
+  }
+  try {
+    await ensureCurrentTab();
+  } catch (error) {
+    setStatus(error.message || 'Unable to determine the active tab.', 'error');
+    return;
+  }
+  const articleMeta = getArticleMeta();
+  if (!articleMeta.url) {
+    setStatus('Missing article URL. Re-run extraction and summary.', 'error');
+    return;
+  }
+  const summaryBundle = deriveSummaryForPrompt();
+  setBentoButtonState(true);
+  clearBentoState(true);
+  setStatus('Checking Prompt API availability…', 'notice', true);
+  try {
+    const layout = await generateBentoLayout(articleMeta, summaryBundle);
+    const storageKey = `bento_${currentTabId}`;
+    await chrome.storage.local.set({
+      [storageKey]: {
+        data: layout,
+        article: articleMeta,
+        summary: summaryBundle,
+        generatedAt: Date.now()
+      }
+    });
+    latestBentoKey = storageKey;
+    if (bentoLink) {
+      const viewerUrl = `${chrome.runtime.getURL('bento.html')}#${encodeURIComponent(storageKey)}`;
+      bentoLink.href = viewerUrl;
+      bentoLink.hidden = false;
+    }
+    setStatus('✓ Bento grid ready. Use the link to open the preview.', 'info');
+  } catch (error) {
+    console.error('Bento generation error:', error);
+    const message = error?.message || 'Failed to build Bento grid.';
+    setStatus(message, 'error');
+  } finally {
+    setBentoButtonState(false);
+  }
 };
 
 const getActiveTab = () =>
@@ -230,6 +580,8 @@ const renderExclusions = (items = []) => {
 const populateText = ({ text, title, url, excludedCount = 0, excluded = [] }) => {
   latestText = text || '';
   latestExcludedCount = excludedCount;
+  latestArticleTitle = title || '';
+  latestArticleUrl = url || '';
   textContainer.textContent = latestText;
   metadataElement.textContent = title ? `${title} — ${url}` : url;
   updateCounts(latestText, excludedCount);
@@ -263,6 +615,10 @@ const populateText = ({ text, title, url, excludedCount = 0, excluded = [] }) =>
     setStatus('Extraction complete.');
     restorePopup(true);
   }
+  if (!hasText) {
+    clearBentoState(true);
+  }
+  refreshBentoControls();
 };
 
 const setupCollapsibleSections = () => {
@@ -287,6 +643,8 @@ const extractPageText = async (clearSummary = true) => {
     summaryContainer.textContent = '';
     summarySection.hidden = true;
     summaryBadge.textContent = '';
+    clearBentoState(true);
+    refreshBentoControls();
     
     // Clear stored summary
     try {
@@ -499,6 +857,7 @@ const displaySummary = (summary, type, length) => {
   // Update summary badge
   const wordCount = summary.trim().split(/\s+/).length;
   summaryBadge.textContent = `${wordCount} words · ${type} · ${length}`;
+  refreshBentoControls();
 };
 
 // Determine a supported output language for the Summarizer API.
@@ -533,6 +892,8 @@ const handleSummarize = async () => {
   summaryContainer.textContent = '';
   summarySection.hidden = false;
   summaryBadge.textContent = 'generating...';
+  clearBentoState(true);
+  refreshBentoControls();
   
   // Focus summary and minimize other sections
   focusSection(summarySection);
@@ -656,6 +1017,8 @@ resetButton.addEventListener('click', async () => {
     summaryContainer.textContent = '';
     summarySection.hidden = true;
     summaryBadge.textContent = '';
+    clearBentoState(true);
+    refreshBentoControls();
     
     setStatus('✓ Reset complete.', 'info', false);
   } catch (error) {
@@ -666,11 +1029,13 @@ resetButton.addEventListener('click', async () => {
 copyButton.addEventListener('click', handleCopy);
 downloadButton.addEventListener('click', handleDownload);
 summarizeButton.addEventListener('click', handleSummarize);
+bentoButton?.addEventListener('click', handleGenerateBento);
 
 // Initialize: restore saved summary and auto-trigger extraction
 const initializePopup = async () => {
   // Setup collapsible sections
   setupCollapsibleSections();
+  refreshBentoControls();
   
   // Try to load saved summary first
   const savedSummary = await loadSummary();

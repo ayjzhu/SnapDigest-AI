@@ -242,6 +242,29 @@ body.selection-preview {
   border-top: 1px solid #e9ecef;
 }
 
+.bento-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.bento-link {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1d4ed8;
+  text-decoration: none;
+}
+
+.bento-link:hover {
+  text-decoration: underline;
+}
+
+.bento-link[hidden] {
+  display: none;
+}
+
 #summarize-btn {
   background: #e7f5ff;
   border-color: #74c0fc;
@@ -250,6 +273,16 @@ body.selection-preview {
 
 #summarize-btn:hover:not(:disabled) {
   background: #d0ebff;
+}
+
+#bento-btn {
+  background: #fef3c7;
+  border-color: #facc15;
+  font-weight: 500;
+}
+
+#bento-btn:hover:not(:disabled) {
+  background: #fde68a;
 }
 
 #summary-container {

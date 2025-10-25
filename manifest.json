@@ -12,5 +12,16 @@
     "scripting",
     "tabs",
     "storage"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "bento.html",
+        "bento.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
   ]
 }
