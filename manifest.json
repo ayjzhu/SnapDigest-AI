@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Plain Text Snapshot",
   "description": "Extracts the active page's visible text and generates AI-powered summaries with persistent session storage.",
-  "version": "1.1.1",
+  "version": "2.0.3",
   "action": {
     "default_title": "Plain Text Snapshot",
     "default_popup": "popup.html"
@@ -11,8 +11,16 @@
     "activeTab",
     "scripting",
     "tabs",
-    "storage"
+    "storage",
+    "sidePanel"
   ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
   "web_accessible_resources": [
     {
       "resources": [

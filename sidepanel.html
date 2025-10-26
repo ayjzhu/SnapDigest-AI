@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bento Builder</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel-bg: #ffffff;
+    --panel-width: 420px;
+    --text-primary: #0f172a;
+    --text-muted: #475569;
+    --text-subtle: #94a3b8;
+    --accent: #7e22ce;
+    --accent-soft: rgba(126, 34, 206, 0.15);
+    --border: #e2e8f0;
+    --card-bg: #f8fafc;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+  }
+  .grad-text {
+    background: linear-gradient(90deg,#C084FC,#7E22CE);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .panel {
+    width: 100%;
+    max-width: var(--panel-width);
+    background: var(--panel-bg);
+    padding: 24px 20px 32px;
+    overflow-y: auto;
+  }
+  .panel-header .eyebrow {
+    margin: 0;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .panel-header h1 {
+    margin: 6px 0 4px;
+    font-size: 1.8rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+  #panel-status {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+  }
+  #panel-status.error {
+    color: #b91c1c;
+  }
+  .job-card,
+  .progress-card,
+  .preview-card,
+  .actions {
+    margin-top: 18px;
+    padding: 16px 18px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--card-bg);
+  }
+  .job-card h2 {
+    margin: 4px 0;
+    font-size: 1.1rem;
+  }
+  .job-card .job-label {
+    margin: 0;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text-subtle);
+    font-weight: 600;
+  }
+  .job-link {
+    font-size: 0.85rem;
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .job-link:hover {
+    text-decoration: underline;
+  }
+  .progress-bar {
+    width: 100%;
+    height: 8px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  #progress-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #c084fc, #7e22ce);
+    transition: width 0.25s ease;
+  }
+  .stage-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .stage {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .stage-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--text-subtle);
+    margin-top: 6px;
+  }
+  .stage.active .stage-dot {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+  .stage.complete .stage-dot {
+    border-color: var(--accent);
+    background: transparent;
+  }
+  .stage h3 {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+  .stage small {
+    color: var(--text-subtle);
+  }
+  .preview-card {
+    padding: 0;
+    background: transparent;
+    border: none;
+  }
+  .preview-placeholder {
+    border: 1px dashed var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    text-align: center;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+  }
+  .preview-root {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+  }
+  .card-span-s,
+  .card-span-m,
+  .card-span-l {
+    grid-column: span 1;
+  }
+  @media (min-width: 520px) {
+    .card-span-m {
+      grid-column: span 2;
+    }
+    .card-span-l {
+      grid-column: span 2;
+    }
+  }
+  .preview-root .card {
+    border-radius: 18px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    padding: 16px;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+    min-height: 120px;
+  }
+  .preview-root .darkcard {
+    background: #0f172a;
+    color: #e2e8f0;
+  }
+  .preview-root .tag {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    background: #e2e8f0;
+    color: var(--text-muted);
+    padding: 3px 8px;
+    border-radius: 999px;
+  }
+  .preview-root .card-title {
+    margin: 6px 0;
+    font-size: 1rem;
+  }
+  .preview-root .card-body {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .preview-root .darkcard .card-body,
+  .preview-root .darkcard .card-list li {
+    color: #e2e8f0;
+  }
+  .preview-root .card-list {
+    margin: 0;
+    padding-left: 1.1rem;
+    font-size: 0.8rem;
+  }
+  .preview-root .card-list--dark {
+    color: #e2e8f0;
+  }
+  .progress-pair {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .progress-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+  .progress-pair .progress-track {
+    width: 100%;
+    height: 6px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    overflow: hidden;
+  }
+  .progress-pair .progress-fill {
+    height: 100%;
+    border-radius: inherit;
+  }
+  .card-sources {
+    font-size: 0.75rem;
+    color: var(--text-subtle);
+  }
+  .card-sources a {
+    color: inherit;
+  }
+  .actions {
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+  }
+  .actions button {
+    flex: 1;
+    border: none;
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: var(--accent);
+    color: white;
+    transition: opacity 0.2s ease;
+  }
+  .actions button.secondary {
+    background: #e2e8f0;
+    color: var(--text-primary);
+  }
+  .actions button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .activity-log {
+    margin-top: 14px;
+    padding: 12px;
+    border-radius: 12px;
+    background: #f1f5f9;
+    font-size: 0.85rem;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+  .activity-log p {
+    margin: 0 0 6px;
+    color: var(--text-muted);
+  }
+</style>
+</head>
+<body>
+  <div class="panel">
+    <header class="panel-header">
+      <p class="eyebrow">Plain Text Snapshot</p>
+      <h1>Bento Builder</h1>
+      <p id="panel-status">Waiting for a Bento request…</p>
+    </header>
+
+    <section class="job-card">
+      <p class="job-label">Current article</p>
+      <h2 id="job-article-title">No article selected</h2>
+      <a id="job-article-link" class="job-link" href="#" target="_blank" rel="noopener" hidden>Open source article</a>
+    </section>
+
+    <section class="progress-card">
+      <div class="progress-bar">
+        <div id="progress-fill"></div>
+      </div>
+      <ul class="stage-list">
+        <li class="stage active" data-stage="waiting">
+          <span class="stage-dot"></span>
+          <div>
+            <h3>Waiting</h3>
+            <small class="stage-detail">Launch Bento render from the popup.</small>
+          </div>
+        </li>
+        <li class="stage" data-stage="preparing">
+          <span class="stage-dot"></span>
+          <div>
+            <h3>Preparing summary</h3>
+            <small class="stage-detail">Packaging article summary.</small>
+          </div>
+        </li>
+        <li class="stage" data-stage="checking">
+          <span class="stage-dot"></span>
+          <div>
+            <h3>Checking model</h3>
+            <small class="stage-detail">Verifying Prompt API availability.</small>
+          </div>
+        </li>
+        <li class="stage" data-stage="downloading">
+          <span class="stage-dot"></span>
+          <div>
+            <h3>Downloading</h3>
+            <small class="stage-detail">Caching on-device model.</small>
+          </div>
+        </li>
+        <li class="stage" data-stage="prompting">
+          <span class="stage-dot"></span>
+          <div>
+            <h3>Generating cards</h3>
+            <small class="stage-detail">Prompting Gemini Nano.</small>
+          </div>
+        </li>
+        <li class="stage" data-stage="rendering">
+          <span class="stage-dot"></span>
+          <div>
+            <h3>Rendering preview</h3>
+            <small class="stage-detail">Building Bento grid.</small>
+          </div>
+        </li>
+        <li class="stage" data-stage="complete">
+          <span class="stage-dot"></span>
+          <div>
+            <h3>Complete</h3>
+            <small class="stage-detail">Ready to view or save.</small>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <section class="preview-card">
+      <div id="preview-placeholder" class="preview-placeholder">
+        Start a Bento render to see the live grid preview here.
+      </div>
+      <div id="preview-root" class="preview-root"></div>
+    </section>
+
+    <section class="actions">
+      <button id="open-full" type="button" disabled>Open Full Page</button>
+      <button id="download-html" type="button" class="secondary" disabled>Download HTML</button>
+    </section>
+
+    <div id="activity-log" class="activity-log" aria-live="polite"></div>
+  </div>
+  <script src="sidepanel.js" defer></script>
+</body>
+</html>

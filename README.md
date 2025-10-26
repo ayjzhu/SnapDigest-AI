@@ -8,7 +8,7 @@ A Chrome extension that captures the visible text from the active tab and presen
 - Interactive "Exclude Elements" mode that temporarily minimizes the popup so you can click page elements to omit them, flashing the popup with updated text after each exclusion while staying in selection mode
 - Right-click any dashed (excluded) element to restore it, or use **Reset** to clear all exclusions
 - **AI-Powered Summarization**: Generate summaries using Chrome's built-in Summarizer API with options for type (TL;DR, Key Points, etc.) and length
-- **Bento Grid Visualization**: Create beautiful, structured visual summaries using Chrome's built-in Prompt API
+- **Bento Grid Visualization**: Create beautiful, structured visual summaries using Chrome's built-in Prompt API with live preview in the side panel
 - Displays page title, URL, word and character counts with exclusion tally
 - Copy-to-clipboard and download-as-text helpers
 - Minimal monospace UI with accessible status feedback
@@ -53,15 +53,11 @@ To use the AI-powered features, you need:
 6. Use **Exclude Elements** to enter selection mode; the popup minimizes so you can hover the page and click exactly one element to exclude. The popup reopens with updated text automatically.
 7. Right-click a dashed element to restore it, or click **Reset** to clear every exclusion.
 8. Click **Summarize** to generate an AI summary of the extracted text.
-9. Once you have a summary, click **Render Bento Grid** to create a visual digest.
-
-## Testing AI Features
-
-Open `test-prompt-api.html` in Chrome to verify that the Prompt API is available and working on your system.
+9. Once you have a summary, click **Render Bento Grid** to create a visual digest in the side panel.
 
 ## Notes
 
-- The extension only requests the `activeTab`, `scripting`, `tabs`, and `storage` permissions.
+- The extension only requests the `activeTab`, `scripting`, `tabs`, `storage`, and `sidePanel` permissions.
 - Text extraction and AI processing run entirely locally; no data leaves your browser.
 - For highly dynamic pages, re-run extraction to capture the freshest content.
 - Exclusions are remembered per tab while the page stays loaded; reload the page or press **Reset** to start fresh.
@@ -88,3 +84,10 @@ Open `test-prompt-api.html` in Chrome to verify that the Prompt API is available
 
 - Follow the same steps as for Prompt API issues
 - The Summarizer and Prompt APIs share the same Gemini Nano model
+
+### "Side panel API is not available"
+
+- Ensure you're using Chrome 114 or later
+- Check that the extension has the `sidePanel` permission in manifest.json
+- Try reloading the extension at `chrome://extensions/`
+- Restart Chrome if the issue persists

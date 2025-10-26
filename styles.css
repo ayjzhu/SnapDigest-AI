@@ -285,6 +285,16 @@ body.selection-preview {
   background: #fde68a;
 }
 
+#bento-open-panel-btn {
+  background: #e0f2fe;
+  border-color: #38bdf8;
+  font-weight: 500;
+}
+
+#bento-open-panel-btn:hover:not(:disabled) {
+  background: #bae6fd;
+}
+
 #summary-container {
   background: #f0f4f8;
   border-color: #b8cfe3;

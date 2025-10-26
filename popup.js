@@ -14,6 +14,7 @@ const textSection = document.getElementById('text-section');
 const textBadge = document.getElementById('text-badge');
 const metadataElement = document.getElementById('metadata');
 const bentoButton = document.getElementById('bento-btn');
+const bentoOpenPanelButton = document.getElementById('bento-open-panel-btn');
 const bentoLink = document.getElementById('bento-link');
 const statusElement = document.getElementById('status');
 const countElement = document.getElementById('count');
@@ -80,54 +81,12 @@ const STATUS_COLORS = {
   notice: '#2563eb'
 };
 
-const BENTO_JSON_SCHEMA = {
-  type: 'object',
-  properties: {
-    header: {
-      type: 'object',
-      properties: {
-        title: { type: 'string' },
-        subtitle: { type: 'string' },
-        cta: {
-          type: 'object',
-          properties: {
-            label: { type: 'string' },
-            url: { type: 'string' }
-          },
-          required: ['label', 'url']
-        }
-      },
-      required: ['title', 'subtitle']
-    },
-    cards: {
-      type: 'array',
-      minItems: 4,
-      maxItems: 10,
-      items: {
-        type: 'object',
-        properties: {
-          kind: { type: 'string', enum: ['lead', 'takeaway', 'stat', 'quote', 'list', 'links', 'tip'] },
-          title: { type: 'string' },
-          body: { type: 'string' },
-          bullets: { type: 'array', items: { type: 'string' } },
-          tag: { type: 'string' },
-          progressLabelLeft: { type: 'string' },
-          progressLabelRight: { type: 'string' },
-          progressLeftPct: { type: 'number', minimum: 0, maximum: 100 },
-          progressRightPct: { type: 'number', minimum: 0, maximum: 100 },
-          size: { type: 'string', enum: ['s', 'm', 'l'] },
-          emphasis: { type: 'string', enum: ['default', 'accent', 'dark'] },
-          sourceAnchors: { type: 'array', items: { type: 'string' } }
-        },
-        required: ['kind', 'title', 'size']
-      }
-    }
-  },
-  required: ['header', 'cards']
-};
-
 const BENTO_BUTTON_LABEL_DEFAULT = (bentoButton?.textContent || 'Render Bento Grid').trim();
-const BENTO_BUTTON_LABEL_WORKING = 'Rendering…';
+const BENTO_BUTTON_LABEL_WORKING = 'Opening side panel…';
+const BENTO_PANEL_BUTTON_LABEL_DEFAULT = (bentoOpenPanelButton?.textContent || 'Open Side Panel').trim();
+const BENTO_PANEL_BUTTON_LABEL_WORKING = 'Opening…';
+const BENTO_ACTIVE_JOB_KEY = 'bento_active_job';
+const BENTO_LAST_RESULT_KEY = 'bento_last_result';
 
 const injectedTabs = new Set();
 const fallbackWidth = Math.max(360, (window.outerWidth || document.documentElement.offsetWidth || 320) + 40);
@@ -147,8 +106,9 @@ let previewTimer = null;
 let pendingPreview = false;
 let latestArticleTitle = '';
 let latestArticleUrl = '';
-let latestBentoKey = '';
 let bentoInProgress = false;
+let bentoJobActive = false;
+let bentoResultAvailable = false;
 
 const PREVIEW_DURATION_MS = 1700;
 
@@ -156,27 +116,6 @@ const setStatus = (message, tone = 'info', streaming = false) => {
   statusElement.textContent = message || '';
   statusElement.style.color = STATUS_COLORS[tone] || STATUS_COLORS.info;
   statusElement.classList.toggle('streaming', streaming);
-};
-
-const getLanguageModelApi = () => {
-  // Check for the LanguageModel API (latest Chrome API)
-  if (typeof self.LanguageModel !== 'undefined') {
-    return self.LanguageModel;
-  }
-  // Fallback to older API patterns
-  if (self?.ai?.languageModel) {
-    return self.ai.languageModel;
-  }
-  if (window?.ai?.languageModel) {
-    return window.ai.languageModel;
-  }
-  if (chrome?.ai?.languageModel) {
-    return chrome.ai.languageModel;
-  }
-  if (globalThis?.ai?.languageModel) {
-    return globalThis.ai.languageModel;
-  }
-  return null;
 };
 
 const getSiteNameFromUrl = (url = '') => {
@@ -233,95 +172,129 @@ const deriveSummaryForPrompt = () => {
   };
 };
 
-const formatArrayForPrompt = (value) => {
-  if (Array.isArray(value) && value.length) {
-    return JSON.stringify(value);
+const updateSidePanelAccess = () => {
+  if (!bentoOpenPanelButton) {
+    return;
   }
-  return '[]';
+  const hasPanelState = bentoJobActive || bentoResultAvailable;
+  bentoOpenPanelButton.disabled = !hasPanelState;
+  if (!hasPanelState) {
+    bentoOpenPanelButton.textContent = BENTO_PANEL_BUTTON_LABEL_DEFAULT;
+  }
 };
 
-const buildBentoPrompt = (articleMeta, summaryBundle) => `System:
-You are a UI content composer. Produce compact, factual bento cards from a news/blog article.
-Return strictly VALID JSON matching the provided JSON Schema. No markdown. No extra keys.
-
-User:
-Here is the article context:
-- Title: ${articleMeta.title || 'Unknown'}
-- URL: ${articleMeta.url || 'Unknown'}
-- Domain: ${articleMeta.siteName || 'Unknown'}
-
-Summaries to use (already computed by the Summarizer API):
-- Headline: ${summaryBundle.headline || ''}
-- One-sentence abstract: ${summaryBundle.abstract || ''}
-- Key bullets (≤8): ${formatArrayForPrompt(summaryBundle.bullets)}
-- Notable quotes (speaker + quote): ${formatArrayForPrompt(summaryBundle.quotes)}
-- Important numbers (label + value + unit): ${formatArrayForPrompt(summaryBundle.stats)}
-- Relevant links (label + url): ${formatArrayForPrompt(summaryBundle.links)}
-
-Task:
-1) Create a concise header:
-   - title: a crisp 4–8 word headline using the article’s topic.
-   - subtitle: a single informative line (≤22 words).
-   - cta: label "Read original" and url = ${articleMeta.url || 'Unknown'}.
-
-2) Create 6–8 cards balancing these kinds:
-   - lead (1): the big idea; use size "l".
-   - takeaway (2–3): key ideas; size "m" or "s".
-   - stat (1): one or two metrics; may use progress bars if comparative % available.
-   - quote (0–1): one impactful quotation with attribution in body.
-   - list or links (1): short bullet list (3–6 bullets) or curated links.
-
-3) Populate fields:
-   - title: ≤ 60 chars.
-   - body: ≤ 220 chars, plain text.
-   - bullets: optional, 3–6 items, short.
-   - tag: 1–2 word category (e.g., “Overview”, “Impact”, “Market”).
-   - size: s/m/l per layout guidelines.
-   - emphasis: "default", "accent" for a highlight, or "dark" for contrast.
-   - For a comparative stat, include progressLabelLeft/Right and progressLeftPct/progressRightPct.
-
-4) Output strictly valid JSON that matches the schema. No commentary.`;
-
-const normalizeBentoResponse = (raw) => {
-  if (!raw) {
-    throw new Error('Prompt API returned no data.');
+const applyBentoLink = (descriptor) => {
+  if (!bentoLink) {
+    return;
   }
-  if (typeof raw === 'string') {
-    return JSON.parse(raw);
+  if (descriptor && descriptor.resultKey) {
+    const viewerUrl = chrome.runtime.getURL(`bento.html#${encodeURIComponent(descriptor.resultKey)}`);
+    bentoLink.href = viewerUrl;
+    bentoLink.hidden = false;
+    bentoResultAvailable = true;
+  } else {
+    bentoLink.hidden = true;
+    bentoLink.removeAttribute('href');
+    bentoResultAvailable = false;
   }
-  if (typeof raw === 'object') {
-    if ('output' in raw) {
-      const output = raw.output;
-      if (typeof output === 'string') {
-        return JSON.parse(output);
-      }
-      if (output && typeof output === 'object') {
-        return output;
-      }
-    }
-    return raw;
+  updateSidePanelAccess();
+};
+
+const hydrateBentoLink = async () => {
+  try {
+    const stored = await chrome.storage.local.get(BENTO_LAST_RESULT_KEY);
+    applyBentoLink(stored[BENTO_LAST_RESULT_KEY]);
+  } catch {
+    applyBentoLink(null);
   }
-  throw new Error('Unexpected Prompt API response.');
+};
+
+const hydrateBentoJobState = async () => {
+  try {
+    const stored = await chrome.storage.local.get(BENTO_ACTIVE_JOB_KEY);
+    bentoJobActive = Boolean(stored[BENTO_ACTIVE_JOB_KEY]);
+  } catch {
+    bentoJobActive = false;
+  }
+  updateSidePanelAccess();
+};
+
+const requestSidePanel = async () => {
+  if (!chrome?.runtime?.sendMessage) {
+    throw new Error('Unable to communicate with the extension runtime.');
+  }
+  const windowInfo = await chrome.windows.getCurrent().catch(() => null);
+  const message = { type: 'BENTO_OPEN_PANEL' };
+  if (windowInfo?.id) {
+    message.windowId = windowInfo.id;
+  }
+  const result = await chrome.runtime.sendMessage(message).catch((error) => {
+    throw new Error(error?.message || 'Unable to open the side panel.');
+  });
+  if (result && result.ok === false) {
+    throw new Error(result.error || 'Unable to open the side panel.');
+  }
+};
+
+const queueBentoJob = async () => {
+  const trimmedSummary = (latestSummary || '').trim();
+  if (!trimmedSummary) {
+    throw new Error('Generate a summary before rendering the Bento view.');
+  }
+  const articleMeta = getArticleMeta();
+  if (!articleMeta.url) {
+    throw new Error('Missing article URL. Re-run extraction and summary.');
+  }
+  const tabId = await ensureCurrentTab();
+  const active = await chrome.storage.local.get(BENTO_ACTIVE_JOB_KEY);
+  if (active[BENTO_ACTIVE_JOB_KEY]) {
+    bentoJobActive = true;
+    updateSidePanelAccess();
+    return { jobId: active[BENTO_ACTIVE_JOB_KEY], reused: true };
+  }
+  const summaryBundle = deriveSummaryForPrompt();
+  const jobId = `bento_job_${Date.now()}`;
+  const payload = {
+    id: jobId,
+    tabId,
+    status: 'pending',
+    articleMeta,
+    summaryBundle,
+    summaryMeta: {
+      type: latestSummaryType,
+      length: latestSummaryLength
+    },
+    createdAt: Date.now()
+  };
+  await chrome.storage.local.set({
+    [jobId]: payload,
+    [BENTO_ACTIVE_JOB_KEY]: jobId
+  });
+  bentoJobActive = true;
+  updateSidePanelAccess();
+  try {
+    await chrome.storage.local.remove(BENTO_LAST_RESULT_KEY);
+  } catch (error) {
+    console.warn('Failed to clear previous Bento result:', error);
+  }
+  return { jobId, reused: false };
 };
 
 const clearBentoState = (removeStored = false) => {
-  latestBentoKey = '';
-  if (bentoLink) {
-    bentoLink.hidden = true;
-    bentoLink.removeAttribute('href');
+  if (removeStored) {
+    chrome.storage.local.remove(BENTO_LAST_RESULT_KEY).catch(() => {});
   }
-  if (removeStored && currentTabId) {
-    const key = `bento_${currentTabId}`;
-    chrome.storage.local.remove(key).catch(() => {});
-  }
+  applyBentoLink(null);
 };
 
 const refreshBentoControls = () => {
   if (!bentoButton) {
+    updateSidePanelAccess();
     return;
   }
   if (bentoInProgress) {
     bentoButton.disabled = true;
+    updateSidePanelAccess();
     return;
   }
   const hasSummary = Boolean(latestSummary && latestSummary.trim().length);
@@ -329,6 +302,7 @@ const refreshBentoControls = () => {
   if (!hasSummary) {
     clearBentoState(true);
   }
+  updateSidePanelAccess();
 };
 
 const setBentoButtonState = (inProgress) => {
@@ -344,6 +318,49 @@ const setBentoButtonState = (inProgress) => {
   }
 };
 
+const handleGenerateBentoRequest = async () => {
+  if (!bentoButton) {
+    return;
+  }
+  setBentoButtonState(true);
+  try {
+    const { reused } = await queueBentoJob();
+    if (!reused) {
+      applyBentoLink(null);
+    }
+    await requestSidePanel();
+    setStatus(
+      reused
+        ? 'Bento render already running in the side panel.'
+        : 'Bento render started in the side panel.',
+      'notice'
+    );
+  } catch (error) {
+    console.error('Failed to launch Bento builder:', error);
+    setStatus(error.message || 'Unable to launch Bento builder.', 'error');
+  } finally {
+    setBentoButtonState(false);
+  }
+};
+
+const handleOpenSidePanelOnly = async () => {
+  if (!bentoOpenPanelButton) {
+    return;
+  }
+  bentoOpenPanelButton.disabled = true;
+  bentoOpenPanelButton.textContent = BENTO_PANEL_BUTTON_LABEL_WORKING;
+  try {
+    await requestSidePanel();
+    setStatus('Side panel opened.', 'notice');
+  } catch (error) {
+    console.error('Failed to reopen Bento side panel:', error);
+    setStatus(error.message || 'Unable to open the side panel.', 'error');
+  } finally {
+    bentoOpenPanelButton.textContent = BENTO_PANEL_BUTTON_LABEL_DEFAULT;
+    updateSidePanelAccess();
+  }
+};
+
 const ensureCurrentTab = async () => {
   if (currentTabId) {
     return currentTabId;
@@ -351,106 +368,6 @@ const ensureCurrentTab = async () => {
   const tab = await getActiveTab();
   currentTabId = tab.id;
   return currentTabId;
-};
-
-const generateBentoLayout = async (articleMeta, summaryBundle) => {
-  const languageModelApi = getLanguageModelApi();
-  if (!languageModelApi) {
-    throw new Error('Prompt API is not available in this browser. Please ensure you are using Chrome 127+ with the AI features enabled.');
-  }
-  
-  // Check availability using the correct API method
-  let availability = 'readily';
-  if (typeof languageModelApi.availability === 'function') {
-    try {
-      availability = await languageModelApi.availability();
-    } catch (error) {
-      console.warn('Language Model availability check failed:', error);
-      throw new Error('Unable to check Prompt API availability. Please ensure you have enabled the AI features in Chrome.');
-    }
-  }
-  
-  if (availability === 'no') {
-    throw new Error('Prompt API is not available on this device. Your device may not meet the hardware requirements.');
-  }
-  
-  const createOptions = {
-    temperature: 0.2,
-    topK: 1,
-    maxOutputTokens: 2048
-  };
-  
-  if (availability === 'after-download' || availability === 'downloadable') {
-    createOptions.monitor = (monitor) => {
-      monitor.addEventListener('downloadprogress', (event) => {
-        if (typeof event.loaded === 'number') {
-          setStatus(`Downloading model: ${Math.round(event.loaded * 100)}%`, 'notice', true);
-        }
-      });
-    };
-  }
-  
-  const session = await languageModelApi.create(createOptions);
-  try {
-    const prompt = buildBentoPrompt(articleMeta, summaryBundle);
-    const response = await session.prompt(prompt, { responseConstraint: BENTO_JSON_SCHEMA });
-    const parsed = normalizeBentoResponse(response);
-    if (!parsed || !parsed.header || !Array.isArray(parsed.cards)) {
-      throw new Error('Prompt API returned incomplete Bento data.');
-    }
-    return parsed;
-  } finally {
-    if (typeof session.destroy === 'function') {
-      session.destroy();
-    }
-  }
-};
-
-const handleGenerateBento = async () => {
-  if (!latestSummary || !latestSummary.trim()) {
-    setStatus('Generate a summary before rendering the Bento view.', 'notice');
-    return;
-  }
-  try {
-    await ensureCurrentTab();
-  } catch (error) {
-    setStatus(error.message || 'Unable to determine the active tab.', 'error');
-    return;
-  }
-  const articleMeta = getArticleMeta();
-  if (!articleMeta.url) {
-    setStatus('Missing article URL. Re-run extraction and summary.', 'error');
-    return;
-  }
-  const summaryBundle = deriveSummaryForPrompt();
-  setBentoButtonState(true);
-  clearBentoState(true);
-  setStatus('Checking Prompt API availability…', 'notice', true);
-  try {
-    const layout = await generateBentoLayout(articleMeta, summaryBundle);
-    const storageKey = `bento_${currentTabId}`;
-    await chrome.storage.local.set({
-      [storageKey]: {
-        data: layout,
-        article: articleMeta,
-        summary: summaryBundle,
-        generatedAt: Date.now()
-      }
-    });
-    latestBentoKey = storageKey;
-    if (bentoLink) {
-      const viewerUrl = `${chrome.runtime.getURL('bento.html')}#${encodeURIComponent(storageKey)}`;
-      bentoLink.href = viewerUrl;
-      bentoLink.hidden = false;
-    }
-    setStatus('✓ Bento grid ready. Use the link to open the preview.', 'info');
-  } catch (error) {
-    console.error('Bento generation error:', error);
-    const message = error?.message || 'Failed to build Bento grid.';
-    setStatus(message, 'error');
-  } finally {
-    setBentoButtonState(false);
-  }
 };
 
 const getActiveTab = () =>
@@ -992,6 +909,19 @@ const handleSummarize = async () => {
   }
 };
 
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'local') {
+    return;
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, BENTO_LAST_RESULT_KEY)) {
+    applyBentoLink(changes[BENTO_LAST_RESULT_KEY].newValue);
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, BENTO_ACTIVE_JOB_KEY)) {
+    bentoJobActive = Boolean(changes[BENTO_ACTIVE_JOB_KEY].newValue);
+    updateSidePanelAccess();
+  }
+});
+
 chrome.runtime.onMessage.addListener(handleMessage);
 extractButton.addEventListener('click', () => extractPageText(true));
 refineButton.addEventListener('click', toggleSelectionMode);
@@ -1029,12 +959,15 @@ resetButton.addEventListener('click', async () => {
 copyButton.addEventListener('click', handleCopy);
 downloadButton.addEventListener('click', handleDownload);
 summarizeButton.addEventListener('click', handleSummarize);
-bentoButton?.addEventListener('click', handleGenerateBento);
+bentoButton?.addEventListener('click', handleGenerateBentoRequest);
+bentoOpenPanelButton?.addEventListener('click', handleOpenSidePanelOnly);
 
 // Initialize: restore saved summary and auto-trigger extraction
 const initializePopup = async () => {
   // Setup collapsible sections
   setupCollapsibleSections();
+  await hydrateBentoLink();
+  await hydrateBentoJobState();
   refreshBentoControls();
   
   // Try to load saved summary first
