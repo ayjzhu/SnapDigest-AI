@@ -15,6 +15,7 @@ const textBadge = document.getElementById('text-badge');
 const metadataElement = document.getElementById('metadata');
 const bentoButton = document.getElementById('bento-btn');
 const bentoOpenPanelButton = document.getElementById('bento-open-panel-btn');
+const panelStatusElement = document.getElementById('panel-status');
 const bentoLink = document.getElementById('bento-link');
 const statusElement = document.getElementById('status');
 const countElement = document.getElementById('count');
@@ -83,10 +84,11 @@ const STATUS_COLORS = {
 
 const BENTO_BUTTON_LABEL_DEFAULT = (bentoButton?.textContent || 'Render Bento Grid').trim();
 const BENTO_BUTTON_LABEL_WORKING = 'Opening side panel…';
-const BENTO_PANEL_BUTTON_LABEL_DEFAULT = (bentoOpenPanelButton?.textContent || 'Open Side Panel').trim();
-const BENTO_PANEL_BUTTON_LABEL_WORKING = 'Opening…';
+const BENTO_PANEL_BUTTON_LABEL_TOGGLE = 'Toggle Side Panel';
+const BENTO_PANEL_BUTTON_LABEL_WORKING = 'Working…';
 const BENTO_ACTIVE_JOB_KEY = 'bento_active_job';
 const BENTO_LAST_RESULT_KEY = 'bento_last_result';
+const SIDE_PANEL_STATE_KEY = 'side_panel_open_state';
 
 const injectedTabs = new Set();
 const fallbackWidth = Math.max(360, (window.outerWidth || document.documentElement.offsetWidth || 320) + 40);
@@ -172,14 +174,50 @@ const deriveSummaryForPrompt = () => {
   };
 };
 
-const updateSidePanelAccess = () => {
+const updateSidePanelAccess = async () => {
   if (!bentoOpenPanelButton) {
     return;
   }
-  const hasPanelState = bentoJobActive || bentoResultAvailable;
-  bentoOpenPanelButton.disabled = !hasPanelState;
-  if (!hasPanelState) {
-    bentoOpenPanelButton.textContent = BENTO_PANEL_BUTTON_LABEL_DEFAULT;
+  
+  // Check if side panel is currently open
+  let isPanelOpen = false;
+  try {
+    const stored = await chrome.storage.local.get(SIDE_PANEL_STATE_KEY);
+    isPanelOpen = Boolean(stored[SIDE_PANEL_STATE_KEY]);
+  } catch (e) {
+    // Ignore errors
+  }
+  
+  // Button is always enabled for toggling
+  bentoOpenPanelButton.disabled = false;
+  
+  // Update button text based on state
+  const labelElement = bentoOpenPanelButton.querySelector('.label');
+  if (labelElement) {
+    labelElement.textContent = BENTO_PANEL_BUTTON_LABEL_TOGGLE;
+  }
+  
+  // Update tooltip
+  if (isPanelOpen) {
+    bentoOpenPanelButton.title = 'Click to close the side panel';
+  } else {
+    bentoOpenPanelButton.title = 'Click to open the side panel';
+  }
+  
+  // Add visual indicator class when panel is open
+  bentoOpenPanelButton.classList.toggle('panel-is-open', isPanelOpen);
+  
+  // Update panel status indicator
+  if (panelStatusElement) {
+    if (bentoJobActive) {
+      panelStatusElement.textContent = '🔄 Rendering...';
+    } else if (bentoResultAvailable) {
+      panelStatusElement.textContent = '✓ Ready';
+    } else if (isPanelOpen) {
+      panelStatusElement.textContent = '👁️ Open';
+    } else {
+      panelStatusElement.textContent = '';
+    }
   }
 };
 
@@ -234,6 +272,8 @@ const requestSidePanel = async () => {
   if (result && result.ok === false) {
     throw new Error(result.error || 'Unable to open the side panel.');
   }
+  // Mark side panel as open
+  await chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: true });
 };
 
 const queueBentoJob = async () => {
@@ -343,21 +383,46 @@ const handleGenerateBentoRequest = async () => {
   }
 };
 
+const toggleSidePanel = async () => {
+  if (!chrome?.runtime?.sendMessage) {
+    throw new Error('Unable to communicate with the extension runtime.');
+  }
+  const windowInfo = await chrome.windows.getCurrent().catch(() => null);
+  const message = { type: 'BENTO_TOGGLE_PANEL' };
+  if (windowInfo?.id) {
+    message.windowId = windowInfo.id;
+  }
+  const result = await chrome.runtime.sendMessage(message).catch((error) => {
+    throw new Error(error?.message || 'Unable to toggle the side panel.');
+  });
+  if (result && result.ok === false) {
+    throw new Error(result.error || 'Unable to toggle the side panel.');
+  }
+};
+
 const handleOpenSidePanelOnly = async () => {
   if (!bentoOpenPanelButton) {
     return;
   }
+  
   bentoOpenPanelButton.disabled = true;
-  bentoOpenPanelButton.textContent = BENTO_PANEL_BUTTON_LABEL_WORKING;
+  const labelElement = bentoOpenPanelButton.querySelector('.label');
+  
+  if (labelElement) {
+    labelElement.textContent = BENTO_PANEL_BUTTON_LABEL_WORKING;
+  }
+  
   try {
-    await requestSidePanel();
-    setStatus('Side panel opened.', 'notice');
+    await toggleSidePanel();
+    setStatus('Side panel toggled.', 'notice');
   } catch (error) {
-    console.error('Failed to reopen Bento side panel:', error);
-    setStatus(error.message || 'Unable to open the side panel.', 'error');
+    console.error('Failed to toggle side panel:', error);
+    setStatus(error.message || 'Unable to toggle the side panel.', 'error');
   } finally {
-    bentoOpenPanelButton.textContent = BENTO_PANEL_BUTTON_LABEL_DEFAULT;
-    updateSidePanelAccess();
+    // Small delay to let the state update
+    setTimeout(async () => {
+      await updateSidePanelAccess();
+    }, 300);
   }
 };
 
@@ -920,6 +985,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     bentoJobActive = Boolean(changes[BENTO_ACTIVE_JOB_KEY].newValue);
     updateSidePanelAccess();
   }
+  if (Object.prototype.hasOwnProperty.call(changes, SIDE_PANEL_STATE_KEY)) {
+    updateSidePanelAccess();
+  }
 });
 
 chrome.runtime.onMessage.addListener(handleMessage);
@@ -968,6 +1036,7 @@ const initializePopup = async () => {
   setupCollapsibleSections();
   await hydrateBentoLink();
   await hydrateBentoJobState();
+  await updateSidePanelAccess();
   refreshBentoControls();
   
   // Try to load saved summary first

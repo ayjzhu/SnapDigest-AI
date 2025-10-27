@@ -19,6 +19,13 @@
     <button id="copy-btn" type="button" disabled>Copy All</button>
     <button id="download-btn" type="button" disabled>Download .txt</button>
   </section>
+  <section class="side-panel-control">
+    <button id="bento-open-panel-btn" type="button" class="side-panel-toggle" title="Click to toggle the side panel">
+      <span class="icon">📊</span>
+      <span class="label">Toggle Side Panel</span>
+    </button>
+    <span id="panel-status" class="panel-status"></span>
+  </section>
   <section class="summarizer-controls">
     <button id="summarize-btn" type="button" disabled>Summarize</button>
     <select id="summary-type">
@@ -52,7 +59,6 @@
     <div id="summary-container" class="text-container" tabindex="0" aria-label="Summary"></div>
     <div class="bento-actions">
       <button id="bento-btn" type="button" disabled>Render Bento Grid</button>
-      <button id="bento-open-panel-btn" type="button" disabled>Open Side Panel</button>
       <a id="bento-link" class="bento-link" href="#" target="_blank" rel="noopener" hidden>View Bento Page</a>
     </div>
   </section>

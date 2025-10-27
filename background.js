@@ -29,4 +29,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })();
     return true;
   }
+  
+  if (message.type === 'BENTO_CLOSE_PANEL') {
+    // Forward close message to sidepanel
+    chrome.runtime.sendMessage({ type: 'CLOSE_SIDE_PANEL_INTERNAL' }).catch(() => {
+      // Sidepanel might not be open, ignore error
+    });
+    sendResponse({ ok: true });
+    return true;
+  }
+  
+  if (message.type === 'BENTO_TOGGLE_PANEL') {
+    (async () => {
+      try {
+        if (!chrome.sidePanel) {
+          throw new Error('Side panel API is not available.');
+        }
+        
+        const windowId =
+          message.windowId ||
+          sender?.tab?.windowId ||
+          (await chrome.windows.getCurrent()).id;
+        
+        // Try to open the panel (if closed, this will open it; if open, this does nothing)
+        chrome.sidePanel.open({ windowId }).catch(() => {});
+        
+        // Try to close the panel (if open, this will reach it and close it; if closed, message fails silently)
+        chrome.runtime.sendMessage({ type: 'CLOSE_SIDE_PANEL_INTERNAL' }).catch(() => {});
+        
+        sendResponse({ ok: true });
+      } catch (error) {
+        console.error('Failed to toggle side panel:', error);
+        sendResponse({ ok: false, error: error.message });
+      }
+    })();
+    return true;
+  }
 });

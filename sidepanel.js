@@ -606,6 +606,45 @@ const renderCard = ${renderCard.toString()};
   openFullButton.addEventListener('click', handleOpenFull);
   downloadButton.addEventListener('click', handleDownload);
 
+  // Track side panel visibility state
+  const SIDE_PANEL_STATE_KEY = 'side_panel_open_state';
+  
+  // Mark panel as open when loaded
+  chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: true }).catch(() => {});
+  
+  // Mark panel as closed when the window/panel is about to unload
+  const markPanelClosed = () => {
+    chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: false }).catch(() => {});
+  };
+  
+  window.addEventListener('beforeunload', markPanelClosed);
+  window.addEventListener('pagehide', markPanelClosed);
+  window.addEventListener('unload', markPanelClosed);
+  
+  // Handle visibility changes more accurately
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      // Panel might be closing or hidden, wait a bit to confirm
+      setTimeout(() => {
+        if (document.hidden) {
+          chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: false }).catch(() => {});
+        }
+      }, 200);
+    } else {
+      // Panel is visible again
+      chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: true }).catch(() => {});
+    }
+  });
+  
+  // Periodically check if we're still visible (in case panel was closed another way)
+  setInterval(() => {
+    if (document.hidden || !document.hasFocus()) {
+      chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: false }).catch(() => {});
+    } else {
+      chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: true }).catch(() => {});
+    }
+  }, 2000);
+
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'local') {
       return;
@@ -618,6 +657,16 @@ const renderCard = ${renderCard.toString()};
     }
     if (Object.prototype.hasOwnProperty.call(changes, BENTO_LAST_RESULT_KEY) && !jobInFlight) {
       hydrateLastResult();
+    }
+  });
+
+  // Listen for close message from background/popup
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message && message.type === 'CLOSE_SIDE_PANEL_INTERNAL') {
+      // Close the sidepanel using window.close()
+      window.close();
+      sendResponse({ ok: true });
+      return true;
     }
   });
 
