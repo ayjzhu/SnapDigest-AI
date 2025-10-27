@@ -49,18 +49,24 @@
   const BENTO_LAST_RESULT_KEY = 'bento_last_result';
   const STAGE_SEQUENCE = ['waiting', 'preparing', 'checking', 'downloading', 'prompting', 'rendering', 'complete'];
 
-  const statusEl = document.getElementById('panel-status');
-  const articleTitleEl = document.getElementById('job-article-title');
-  const articleLinkEl = document.getElementById('job-article-link');
-  const progressFill = document.getElementById('progress-fill');
+  const statusTextEl = document.getElementById('status-text');
+  const statusIndicator = document.getElementById('status-indicator');
+  const articleTitleEl = document.getElementById('article-title');
+  const articleCard = document.getElementById('article-card');
+  const progressSection = document.getElementById('progress-section');
   const stageElements = new Map(
     Array.from(document.querySelectorAll('.stage')).map((el) => [el.dataset.stage, el])
   );
   const previewPlaceholder = document.getElementById('preview-placeholder');
+  const previewContent = document.getElementById('preview-content');
   const previewRoot = document.getElementById('preview-root');
+  const previewView = document.getElementById('preview-view');
+  const codeView = document.getElementById('code-view');
+  const codeEditor = document.getElementById('code-editor');
+  const codeTab = document.getElementById('code-tab');
+  const previewTab = document.getElementById('preview-tab');
   const openFullButton = document.getElementById('open-full');
   const downloadButton = document.getElementById('download-html');
-  const activityLogEl = document.getElementById('activity-log');
 
   const COLS = {
     s: 'card-span-s',
@@ -73,6 +79,9 @@
   let currentLayout = null;
   let currentResultKey = '';
   let currentArticleMeta = {};
+  let currentView = 'preview'; // 'preview' or 'code'
+  let generatedHtml = '';
+  let codeAnimationInterval = null;
 
   const esc = (value = '') =>
     String(value).replace(/[&<>"']/g, (match) => ({
@@ -91,27 +100,23 @@
     return Math.min(100, Math.max(0, num));
   };
 
-  const setStatusText = (text, isError = false) => {
-    if (!statusEl) return;
-    statusEl.textContent = text || '';
-    statusEl.classList.toggle('error', Boolean(isError));
-  };
-
-  const logActivity = (message) => {
-    if (!activityLogEl) return;
-    const entry = document.createElement('p');
-    entry.textContent = `${new Date().toLocaleTimeString()} — ${message}`;
-    activityLogEl.appendChild(entry);
-    while (activityLogEl.childNodes.length > 10) {
-      activityLogEl.removeChild(activityLogEl.firstChild);
+  const setStatusText = (text, state = 'idle') => {
+    if (!statusTextEl) return;
+    statusTextEl.textContent = text || '';
+    
+    // Update indicator
+    statusIndicator.classList.remove('active', 'success', 'error');
+    if (state === 'active') {
+      statusIndicator.classList.add('active');
+    } else if (state === 'success') {
+      statusIndicator.classList.add('success');
+    } else if (state === 'error') {
+      statusIndicator.classList.add('error');
     }
-    activityLogEl.scrollTop = activityLogEl.scrollHeight;
   };
 
   const setProgress = (value) => {
-    if (!progressFill) return;
-    const clamped = Math.max(0, Math.min(1, value));
-    progressFill.style.width = `${Math.round(clamped * 100)}%`;
+    // Progress is now shown via stage indicators
   };
 
   const updateStageDetail = (stageId, detail) => {
@@ -133,33 +138,118 @@
     if (detail) {
       updateStageDetail(stageId, detail);
     }
+    
+    // Show/hide progress section based on stage
+    if (stageId === 'waiting' || stageId === 'complete') {
+      progressSection.classList.remove('visible');
+    } else {
+      progressSection.classList.add('visible');
+    }
   };
 
   const setJobMeta = (article = {}) => {
     currentArticleMeta = article || {};
     articleTitleEl.textContent = article.title || 'No article selected';
-    if (article.url) {
-      articleLinkEl.href = article.url;
-      articleLinkEl.hidden = false;
+    
+    if (article.title) {
+      articleCard.classList.add('visible');
     } else {
-      articleLinkEl.hidden = true;
-      articleLinkEl.removeAttribute('href');
+      articleCard.classList.remove('visible');
     }
+  };
+
+  const switchView = (view) => {
+    currentView = view;
+    if (view === 'code') {
+      codeView.classList.add('active');
+      previewView.classList.remove('active');
+      codeTab.classList.add('active');
+      previewTab.classList.remove('active');
+    } else {
+      previewView.classList.add('active');
+      codeView.classList.remove('active');
+      previewTab.classList.add('active');
+      codeTab.classList.remove('active');
+    }
+  };
+
+  const animateCodeGeneration = (html) => {
+    if (codeAnimationInterval) {
+      clearInterval(codeAnimationInterval);
+    }
+    
+    const lines = html.split('\n');
+    let currentLine = 0;
+    
+    codeEditor.innerHTML = '';
+    
+    codeAnimationInterval = setInterval(() => {
+      if (currentLine < lines.length) {
+        const lineDiv = document.createElement('div');
+        lineDiv.className = 'code-line';
+        lineDiv.innerHTML = `
+          <span class="line-number">${currentLine + 1}</span>
+          <span class="line-content">${escapeHtml(lines[currentLine])}</span>
+        `;
+        codeEditor.appendChild(lineDiv);
+        
+        if (currentLine === lines.length - 1) {
+          // Add cursor on last line
+          const cursor = document.createElement('span');
+          cursor.className = 'code-cursor';
+          lineDiv.querySelector('.line-content').appendChild(cursor);
+        }
+        
+        codeEditor.scrollTop = codeEditor.scrollHeight;
+        currentLine++;
+      } else {
+        clearInterval(codeAnimationInterval);
+        codeAnimationInterval = null;
+      }
+    }, 20); // Fast animation
+  };
+
+  const escapeHtml = (text) => {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  };
+
+  const showCompleteCode = (html) => {
+    if (codeAnimationInterval) {
+      clearInterval(codeAnimationInterval);
+      codeAnimationInterval = null;
+    }
+    
+    const lines = html.split('\n');
+    codeEditor.innerHTML = lines.map((line, index) => `
+      <div class="code-line">
+        <span class="line-number">${index + 1}</span>
+        <span class="line-content">${escapeHtml(line)}</span>
+      </div>
+    `).join('');
   };
 
   const enableActions = (enabled) => {
     openFullButton.disabled = !enabled;
     downloadButton.disabled = !enabled;
+    codeTab.disabled = !enabled;
   };
 
   const resetPreview = () => {
     currentLayout = null;
     currentResultKey = '';
+    generatedHtml = '';
     previewRoot.innerHTML = '';
-    previewPlaceholder.hidden = false;
+    previewPlaceholder.classList.remove('hidden');
+    previewContent.style.display = 'none';
+    codeEditor.innerHTML = '<div class="code-line"><span class="line-number">1</span><span class="line-content">// Waiting for generation...</span></div>';
     enableActions(false);
     setProgress(0);
     setStage('waiting');
+    switchView('preview');
+    articleCard.classList.remove('visible');
+    progressSection.classList.remove('visible');
   };
 
   const formatArrayForPrompt = (value) => {
@@ -316,7 +406,11 @@ Task:
       return;
     }
     previewRoot.innerHTML = layout.cards.map(renderCard).join('');
-    previewPlaceholder.hidden = true;
+    previewPlaceholder.classList.add('hidden');
+    previewContent.style.display = 'block';
+    
+    // Generate and store HTML
+    generatedHtml = buildExportHtml(layout, currentArticleMeta);
   };
 
   const loadPayload = async (key) => {
@@ -412,30 +506,34 @@ Task:
     activeJobId = job.id;
     setJobMeta(job.articleMeta);
     previewRoot.innerHTML = '';
-    previewPlaceholder.hidden = false;
+    previewPlaceholder.classList.remove('hidden');
+    previewContent.style.display = 'none';
     enableActions(false);
     setProgress(0);
     setStage('preparing', 'Packaging summary payload…');
     setProgress(0.15);
-    setStatusText('Packaging summary for Bento render…');
-    logActivity('Packaging summary payload.');
+    setStatusText('Packaging summary for Bento render…', 'active');
     try {
       const layout = await generateBentoLayout(job.articleMeta, job.summaryBundle);
       setStage('rendering', 'Rendering Bento preview…');
       setProgress(0.85);
+      setStatusText('Rendering Bento grid…', 'active');
       renderPreview(layout);
+      
+      // Animate code generation
+      setStatusText('Generating HTML code…', 'active');
+      animateCodeGeneration(generatedHtml);
+      
       const { resultKey } = await persistResult(job, layout);
       currentLayout = layout;
       currentResultKey = resultKey;
       enableActions(true);
       setProgress(1);
       setStage('complete', 'Bento grid ready.');
-      setStatusText('✓ Bento grid ready. Use the buttons below to view or save.');
-      logActivity('Bento render completed successfully.');
+      setStatusText('✓ Bento grid ready', 'success');
     } catch (error) {
       console.error('Bento generation error:', error);
-      setStatusText(error.message || 'Unable to render Bento grid.', true);
-      logActivity(`⚠ ${error.message || 'Bento render failed.'}`);
+      setStatusText(error.message || 'Unable to render Bento grid.', 'error');
       await chrome.storage.local.set({
         [job.id]: { ...job, status: 'error', error: error.message, completedAt: Date.now() }
       });
@@ -455,22 +553,22 @@ Task:
     const stored = await chrome.storage.local.get(jobId);
     const job = stored[jobId];
     if (!job) {
-      setStatusText('Bento job metadata not found. Re-run from the popup.', true);
+      setStatusText('Bento job metadata not found. Re-run from the popup.', 'error');
       return;
     }
     setJobMeta(job.articleMeta);
-    setStatusText('Resuming Bento render…');
-    logActivity('Resuming Bento job.');
+    setStatusText('Resuming Bento render…', 'active');
     if (job.status === 'complete' && job.resultKey) {
       const payload = await loadPayload(job.resultKey);
       if (payload?.data) {
         currentLayout = payload.data;
         currentResultKey = job.resultKey;
         renderPreview(payload.data);
+        showCompleteCode(generatedHtml);
         enableActions(true);
         setProgress(1);
         setStage('complete', 'Bento grid ready.');
-        setStatusText('Loaded the latest Bento grid.');
+        setStatusText('Loaded the latest Bento grid.', 'success');
         return;
       }
     }
@@ -494,22 +592,40 @@ Task:
       currentLayout = payload.data;
       currentResultKey = descriptor.resultKey;
       renderPreview(payload.data);
+      showCompleteCode(generatedHtml);
       enableActions(true);
       setProgress(1);
       setStage('complete', 'Latest Bento grid ready.');
-      setStatusText('Showing the most recent Bento grid.');
+      setStatusText('Showing the most recent Bento grid.', 'success');
     } else {
       setStatusText('Waiting for a Bento request…');
       resetPreview();
     }
   };
 
-  const handleOpenFull = () => {
+  const handleOpenFull = async () => {
     if (!currentResultKey) {
       return;
     }
     const targetUrl = chrome.runtime.getURL(`bento.html#${encodeURIComponent(currentResultKey)}`);
-    chrome.tabs.create({ url: targetUrl });
+    
+    // Open the tab
+    const newTab = await chrome.tabs.create({ url: targetUrl });
+    
+    // Focus the new tab's window to bring user attention to the opened page
+    if (newTab && newTab.windowId) {
+      await chrome.windows.update(newTab.windowId, { focused: true });
+    }
+    
+    // Optional: Send message to background to track this action
+    try {
+      chrome.runtime.sendMessage({ 
+        type: 'BENTO_OPENED_IN_TAB',
+        tabId: newTab.id 
+      });
+    } catch (error) {
+      // Ignore messaging errors
+    }
   };
 
   const sanitizeFilename = (value) =>
@@ -578,11 +694,10 @@ const renderCard = ${renderCard.toString()};
   };
 
   const handleDownload = () => {
-    if (!currentLayout) {
+    if (!generatedHtml) {
       return;
     }
-    const html = buildExportHtml(currentLayout, currentArticleMeta);
-    const blob = new Blob([html], { type: 'text/html' });
+    const blob = new Blob([generatedHtml], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const fileName = `${sanitizeFilename(currentArticleMeta?.title)}.html`;
     const link = document.createElement('a');
@@ -603,8 +718,41 @@ const renderCard = ${renderCard.toString()};
     }
   };
 
+  // Add resize observer for responsive layout adjustments
+  const setupResizeObserver = () => {
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const width = entry.contentRect.width;
+        
+        // Update panel header based on width
+        if (width < 300) {
+          document.body.classList.add('narrow-panel');
+        } else {
+          document.body.classList.remove('narrow-panel');
+        }
+      }
+    });
+    
+    resizeObserver.observe(document.body);
+  };
+
+  // Event Listeners
   openFullButton.addEventListener('click', handleOpenFull);
   downloadButton.addEventListener('click', handleDownload);
+  
+  codeTab.addEventListener('click', () => {
+    if (!codeTab.disabled) {
+      switchView('code');
+    }
+  });
+  
+  previewTab.addEventListener('click', () => {
+    switchView('preview');
+  });
 
   // Track side panel visibility state
   const SIDE_PANEL_STATE_KEY = 'side_panel_open_state';
@@ -646,5 +794,6 @@ const renderCard = ${renderCard.toString()};
     }
   });
 
+  setupResizeObserver();
   bootstrap();
 })();
