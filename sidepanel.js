@@ -621,30 +621,6 @@ const renderCard = ${renderCard.toString()};
   window.addEventListener('pagehide', markPanelClosed);
   window.addEventListener('unload', markPanelClosed);
   
-  // Handle visibility changes more accurately
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      // Panel might be closing or hidden, wait a bit to confirm
-      setTimeout(() => {
-        if (document.hidden) {
-          chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: false }).catch(() => {});
-        }
-      }, 200);
-    } else {
-      // Panel is visible again
-      chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: true }).catch(() => {});
-    }
-  });
-  
-  // Periodically check if we're still visible (in case panel was closed another way)
-  setInterval(() => {
-    if (document.hidden || !document.hasFocus()) {
-      chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: false }).catch(() => {});
-    } else {
-      chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: true }).catch(() => {});
-    }
-  }, 2000);
-
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'local') {
       return;

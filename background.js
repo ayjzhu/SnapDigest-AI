@@ -1,3 +1,5 @@
+const SIDE_PANEL_STATE_KEY = 'side_panel_open_state';
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || typeof message !== 'object') {
     return;
@@ -45,19 +47,39 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (!chrome.sidePanel) {
           throw new Error('Side panel API is not available.');
         }
-        
+
         const windowId =
           message.windowId ||
           sender?.tab?.windowId ||
           (await chrome.windows.getCurrent()).id;
-        
-        // Try to open the panel (if closed, this will open it; if open, this does nothing)
-        chrome.sidePanel.open({ windowId }).catch(() => {});
-        
-        // Try to close the panel (if open, this will reach it and close it; if closed, message fails silently)
-        chrome.runtime.sendMessage({ type: 'CLOSE_SIDE_PANEL_INTERNAL' }).catch(() => {});
-        
-        sendResponse({ ok: true });
+
+        if (!windowId) {
+          throw new Error('Unable to determine the window ID.');
+        }
+
+        let isPanelOpen = false;
+        try {
+          const stored = await chrome.storage.local.get(SIDE_PANEL_STATE_KEY);
+          isPanelOpen = Boolean(stored?.[SIDE_PANEL_STATE_KEY]);
+        } catch {
+          // Ignore storage errors and assume the panel is closed.
+        }
+
+        let nextState = 'opened';
+        if (isPanelOpen) {
+          nextState = 'closed';
+          try {
+            await chrome.runtime.sendMessage({ type: 'CLOSE_SIDE_PANEL_INTERNAL' });
+          } catch {
+            // Ignore errors if the panel context is already gone.
+          }
+          await chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: false }).catch(() => {});
+        } else {
+          await chrome.sidePanel.open({ windowId });
+          await chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: true }).catch(() => {});
+        }
+
+        sendResponse({ ok: true, state: nextState });
       } catch (error) {
         console.error('Failed to toggle side panel:', error);
         sendResponse({ ok: false, error: error.message });
