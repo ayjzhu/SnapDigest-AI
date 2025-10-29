@@ -157,6 +157,44 @@ const setStoredSidePanelState = async (windowId, isOpen) => {
   }
 };
 
+const INTERNAL_PAGE_PROTOCOLS = new Set([
+  'about:',
+  'chrome:',
+  'chrome-error:',
+  'chrome-extension:',
+  'chrome-native:',
+  'chrome-untrusted:',
+  'data:',
+  'devtools:',
+  'edge:',
+  'view-source:'
+]);
+
+const RESTRICTED_HOSTS = new Set(['chrome.google.com']);
+
+const getTabAccessError = (tab) => {
+  const url = tab?.url || '';
+  if (!url) {
+    return 'Unable to detect the active tab URL.';
+  }
+  try {
+    const parsed = new URL(url);
+    const protocol = parsed.protocol;
+    if (INTERNAL_PAGE_PROTOCOLS.has(protocol)) {
+      return 'Chrome blocks extensions from running on internal pages. Switch to a normal website and try again.';
+    }
+    if (protocol === 'file:') {
+      return 'Chrome requires “Allow access to file URLs” to be enabled for this extension before it can read local files.';
+    }
+    if (RESTRICTED_HOSTS.has(parsed.hostname)) {
+      return 'Chrome Web Store pages do not allow extensions to inject code. Open a different site and try again.';
+    }
+  } catch {
+    return 'Unable to access the active tab.';
+  }
+  return null;
+};
+
 if (bentoOpenPanelButton) {
   bentoOpenPanelButton.removeAttribute('title');
   bentoOpenPanelButton.dataset.tooltip = BENTO_PANEL_BUTTON_TOOLTIP_OPEN;
@@ -176,6 +214,7 @@ let latestSummaryType = '';
 let latestSummaryLength = '';
 let selectionActive = false;
 let currentTabId = null;
+let currentTabUrl = '';
 let minimized = false;
 let previewTimer = null;
 let pendingPreview = false;
@@ -532,6 +571,7 @@ const ensureCurrentTab = async () => {
   }
   const tab = await getActiveTab();
   currentTabId = tab.id;
+  currentTabUrl = tab.url || currentTabUrl;
   return currentTabId;
 };
 
@@ -550,12 +590,31 @@ const getActiveTab = () =>
     });
   });
 
+const getTabById = (tabId) =>
+  new Promise((resolve, reject) => {
+    chrome.tabs.get(tabId, (tab) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      resolve(tab);
+    });
+  });
+
 const ensureContentScript = async (tabId) => {
   if (injectedTabs.has(tabId)) {
     return;
   }
-  await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
-  injectedTabs.add(tabId);
+  try {
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+    injectedTabs.add(tabId);
+  } catch (error) {
+    const message = error?.message || error?.toString?.() || 'Unable to inject content script.';
+    if (message.includes('Cannot access contents of the page') || message.includes('Cannot access contents of url')) {
+      throw new Error('Chrome blocks extensions from running on this page. Open a normal website and try again.');
+    }
+    throw error instanceof Error ? error : new Error(message);
+  }
 };
 
 const sendMessageToTab = (tabId, message, attempt = 0) =>
@@ -717,36 +776,48 @@ const extractPageText = async (clearSummary = true) => {
   refineButton.disabled = true;
   resetButton.disabled = true;
   
-  // Clear old summary when extracting new text (but not on initial load)
-  if (clearSummary) {
-    latestSummary = '';
-    latestSummaryType = '';
-    latestSummaryLength = '';
-    summaryContainer.textContent = '';
-    summarySection.hidden = true;
-    summaryBadge.textContent = '';
-    clearBentoState(true);
-    refreshBentoControls();
-    
-    // Clear stored summary
-    try {
-      const tab = await getActiveTab();
-      const key = `summary_${tab.id}`;
-      await chrome.storage.local.remove(key);
-    } catch (error) {
-      console.warn('Failed to clear summary:', error);
-    }
-  }
-  
   setStatus('Extracting…', 'notice');
   try {
     const tab = await getActiveTab();
     currentTabId = tab.id;
+    currentTabUrl = tab.url || currentTabUrl;
+
+    const accessError = getTabAccessError(tab);
+    if (accessError) {
+      throw new Error(accessError);
+    }
+
+    if (clearSummary) {
+      latestSummary = '';
+      latestSummaryType = '';
+      latestSummaryLength = '';
+      summaryContainer.textContent = '';
+      summarySection.hidden = true;
+      summaryBadge.textContent = '';
+      clearBentoState(true);
+      refreshBentoControls();
+      
+      try {
+        const key = `summary_${tab.id}`;
+        await chrome.storage.local.remove(key);
+      } catch (error) {
+        console.warn('Failed to clear summary:', error);
+      }
+    }
+
     await ensureContentScript(tab.id);
     await sendMessageToTab(tab.id, { type: COMMAND_TYPES.EXTRACT });
   } catch (error) {
     console.error(error);
     setStatus(error.message || 'Unable to extract text.', 'error');
+  } finally {
+    const hasText = latestText.length > 0;
+    copyButton.disabled = !hasText;
+    downloadButton.disabled = !hasText;
+    summarizeButton.disabled = !hasText;
+    refineButton.disabled = !hasText && !selectionActive;
+    resetButton.disabled = latestExcludedCount === 0;
+    refreshBentoControls();
   }
 };
 
@@ -780,10 +851,25 @@ const updateSelectionUI = (active) => {
 
 const toggleSelectionMode = async () => {
   try {
-    const tab = currentTabId
-      ? { id: currentTabId }
-      : await getActiveTab();
+    let tab = null;
+    if (currentTabId) {
+      try {
+        tab = await getTabById(currentTabId);
+      } catch {
+        tab = null;
+      }
+    }
+    if (!tab) {
+      tab = await getActiveTab();
+    }
     currentTabId = tab.id;
+    currentTabUrl = tab.url || currentTabUrl;
+
+    const accessError = getTabAccessError(tab);
+    if (accessError) {
+      throw new Error(accessError);
+    }
+
     await ensureContentScript(tab.id);
     const command = selectionActive ? COMMAND_TYPES.STOP_SELECTION : COMMAND_TYPES.START_SELECTION;
     await sendMessageToTab(tab.id, { type: command });
@@ -821,6 +907,7 @@ const handleMessage = (message, sender) => {
 
   if (sender?.tab?.id) {
     currentTabId = sender.tab.id;
+    currentTabUrl = sender.tab.url || currentTabUrl;
   }
 
   switch (message.type) {
@@ -973,6 +1060,7 @@ const handleSummarize = async () => {
   summaryContainer.textContent = '';
   summarySection.hidden = false;
   summaryBadge.textContent = 'generating...';
+  summaryBadge.classList.add('generating'); // Start flashing animation immediately
   clearBentoState(true);
   refreshBentoControls();
   
