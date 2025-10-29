@@ -31,14 +31,16 @@
 
   const renderCard = (card) => {
     const sizeClass = COLS[card.size] || COLS.s;
-    const emphasisClass = card.emphasis === 'dark' ? 'darkcard' : 'card';
+    const baseClass = 'card';
+    const emphasisClass = card.emphasis === 'dark' ? 'darkcard' : '';
     const accentTitle = card.emphasis === 'accent' ? 'grad-text' : '';
     const tag = card.tag ? `<span class="tag">${esc(card.tag)}</span>` : '';
     const bodyClass = 'card-body';
     const listClass = `card-list${card.emphasis === 'dark' ? ' card-list--dark' : ''}`;
 
     let markup = `
-      <div class="${emphasisClass} card-block ${sizeClass}">
+      <div class="${baseClass} ${emphasisClass} ${sizeClass}">
+        <div class="card-block">
         ${tag}
         <h3 class="card-title ${accentTitle}">${esc(card.title)}</h3>
         ${card.body ? `<p class="${bodyClass}">${esc(card.body)}</p>` : ''}
@@ -84,7 +86,7 @@
       markup += `<div class="card-sources">Sources: ${links}</div>`;
     }
 
-    markup += '</div>';
+    markup += '</div></div>';
     return markup;
   };
 

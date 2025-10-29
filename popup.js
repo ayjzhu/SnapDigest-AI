@@ -92,6 +92,71 @@ const BENTO_ACTIVE_JOB_KEY = 'bento_active_job';
 const BENTO_LAST_RESULT_KEY = 'bento_last_result';
 const SIDE_PANEL_STATE_KEY = 'side_panel_open_state';
 
+const normalizeSidePanelState = (rawState) => {
+  if (rawState && typeof rawState === 'object' && !Array.isArray(rawState)) {
+    return { ...rawState };
+  }
+  if (rawState === true) {
+    return { __legacy__: true };
+  }
+  return {};
+};
+
+const getCurrentWindowId = async () => {
+  try {
+    const win = await chrome.windows.getCurrent();
+    if (win && typeof win.id === 'number') {
+      return win.id;
+    }
+  } catch {
+    // Ignore lookup failures.
+  }
+  return null;
+};
+
+const isSidePanelOpenInState = (state, windowId) => {
+  if (typeof windowId === 'number') {
+    const key = String(windowId);
+    if (Object.prototype.hasOwnProperty.call(state, key)) {
+      return Boolean(state[key]);
+    }
+  }
+  return Boolean(state.__legacy__);
+};
+
+const getStoredSidePanelState = async (windowId) => {
+  try {
+    const stored = await chrome.storage.local.get(SIDE_PANEL_STATE_KEY);
+    const state = normalizeSidePanelState(stored?.[SIDE_PANEL_STATE_KEY]);
+    return isSidePanelOpenInState(state, windowId);
+  } catch {
+    return false;
+  }
+};
+
+const setStoredSidePanelState = async (windowId, isOpen) => {
+  try {
+    const stored = await chrome.storage.local.get(SIDE_PANEL_STATE_KEY);
+    const state = normalizeSidePanelState(stored?.[SIDE_PANEL_STATE_KEY]);
+    if (typeof windowId === 'number') {
+      const key = String(windowId);
+      if (isOpen) {
+        state[key] = true;
+      } else {
+        delete state[key];
+      }
+      delete state.__legacy__;
+    } else if (isOpen) {
+      state.__legacy__ = true;
+    } else {
+      delete state.__legacy__;
+    }
+    await chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: state });
+  } catch {
+    // Ignore storage update failures.
+  }
+};
+
 if (bentoOpenPanelButton) {
   bentoOpenPanelButton.removeAttribute('title');
   bentoOpenPanelButton.dataset.tooltip = BENTO_PANEL_BUTTON_TOOLTIP_OPEN;
@@ -187,14 +252,11 @@ const updateSidePanelAccess = async () => {
     return;
   }
   
+  const windowId = await getCurrentWindowId();
+  
   // Check if side panel is currently open
   let isPanelOpen = false;
-  try {
-    const stored = await chrome.storage.local.get(SIDE_PANEL_STATE_KEY);
-    isPanelOpen = Boolean(stored[SIDE_PANEL_STATE_KEY]);
-  } catch (e) {
-    // Ignore errors
-  }
+  isPanelOpen = await getStoredSidePanelState(windowId);
   
   // Button is always enabled for toggling
   bentoOpenPanelButton.disabled = false;
@@ -268,7 +330,7 @@ const requestSidePanel = async () => {
     if (result && result.ok === false) {
       throw new Error(result.error || 'Unable to open the side panel.');
     }
-    await chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: true }).catch(() => {});
+    await setStoredSidePanelState(windowId ?? null, true);
     return;
   }
 
@@ -281,7 +343,7 @@ const requestSidePanel = async () => {
   } catch (error) {
     throw new Error(error?.message || 'Unable to open the side panel.');
   }
-  await chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: true }).catch(() => {});
+  await setStoredSidePanelState(windowId, true);
 };
 
 const queueBentoJob = async () => {
@@ -392,16 +454,10 @@ const handleGenerateBentoRequest = async () => {
 };
 
 const toggleSidePanel = async () => {
-  const windowInfo = await chrome.windows.getCurrent().catch(() => null);
-  const windowId = windowInfo?.id;
+  const windowId = await getCurrentWindowId();
 
   let isPanelOpen = false;
-  try {
-    const stored = await chrome.storage.local.get(SIDE_PANEL_STATE_KEY);
-    isPanelOpen = Boolean(stored?.[SIDE_PANEL_STATE_KEY]);
-  } catch {
-    // Ignore storage errors and default to closed.
-  }
+  isPanelOpen = await getStoredSidePanelState(windowId);
 
   if (!chrome?.sidePanel?.open) {
     if (!chrome?.runtime?.sendMessage) {
@@ -430,7 +486,7 @@ const toggleSidePanel = async () => {
     } catch {
       // Ignore errors if the panel context is already gone.
     }
-    await chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: false }).catch(() => {});
+    await setStoredSidePanelState(windowId, false);
     return;
   }
 
@@ -439,7 +495,7 @@ const toggleSidePanel = async () => {
   } catch (error) {
     throw new Error(error?.message || 'Unable to open the side panel.');
   }
-  await chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: true }).catch(() => {});
+  await setStoredSidePanelState(windowId, true);
 };
 
 const handleOpenSidePanelOnly = async () => {
@@ -912,7 +968,6 @@ const handleSummarize = async () => {
     return;
   }
   summarizeButton.disabled = true;
-  setStatus('Preparing to summarize...', 'notice', true);
   
   // Clear previous summary and show section
   summaryContainer.textContent = '';
@@ -965,8 +1020,7 @@ const handleSummarize = async () => {
     // Create the summarizer
     const summarizer = await self.Summarizer.create(options);
 
-    // Generate streaming summary
-    setStatus('Generating summary...', 'notice', true);
+    // Generate streaming summary - status shown in badge, not in status area
     const stream = await summarizer.summarizeStreaming(latestText, {
       context: ''
     });
@@ -994,10 +1048,12 @@ const handleSummarize = async () => {
 
       const trimmed = fullSummary.trim();
       const wordCount = trimmed ? trimmed.split(/\s+/).length : 0;
-      summaryBadge.textContent = `${wordCount} words · ${currentType} · ${currentLength}`;
+      
+      // Update badge with flashing animation during generation (removed "so far")
+      summaryBadge.textContent = `generating... ${wordCount} words`;
+      summaryBadge.classList.add('generating');
 
       if (fullSummary.length - previousLength > 20) {
-        setStatus(`Generating... ${wordCount} words so far`, 'notice', true);
         previousLength = fullSummary.length;
       }
     }
@@ -1005,12 +1061,17 @@ const handleSummarize = async () => {
     // Display and save the final summary
     displaySummary(fullSummary, currentType, currentLength);
     await saveSummary(fullSummary, currentType, currentLength);
+    
+    // Remove generating class after completion
+    summaryBadge.classList.remove('generating');
     setStatus('✓ Summary complete.', 'info', false);
 
     // Clean up
     summarizer.destroy();
   } catch (error) {
     console.error('Summarization error:', error);
+    summaryBadge.classList.remove('generating');
+    summaryBadge.textContent = 'error';
     setStatus(error.message || 'Failed to summarize.', 'error');
     // Keep whatever partial summary we have visible for the user.
   } finally {
@@ -1094,4 +1155,3 @@ const initializePopup = async () => {
 };
 
 initializePopup();
-
