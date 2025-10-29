@@ -47,7 +47,18 @@
 
   const BENTO_ACTIVE_JOB_KEY = 'bento_active_job';
   const BENTO_LAST_RESULT_KEY = 'bento_last_result';
+  const BENTO_LAST_HTML_KEY = 'bento_last_html';
+  const SIDE_PANEL_STATE_KEY = 'side_panel_open_state';
   const STAGE_SEQUENCE = ['waiting', 'preparing', 'checking', 'downloading', 'prompting', 'rendering', 'complete'];
+  const STAGE_MESSAGES = {
+    preparing: 'Packaging summary payload...',
+    checking: 'Checking Prompt API availability...',
+    downloading: 'Downloading model...',
+    prompting: 'Generating Bento cards...',
+    rendering: 'Rendering Bento preview...',
+    complete: 'Bento grid ready.'
+  };
+  let panelWindowId = null;
 
   const statusTextEl = document.getElementById('status-text');
   const statusIndicator = document.getElementById('status-indicator');
@@ -79,9 +90,113 @@
   let currentLayout = null;
   let currentResultKey = '';
   let currentArticleMeta = {};
-  let currentView = 'preview'; // 'preview' or 'code'
+  let currentView = 'code'; // 'preview' or 'code'
   let generatedHtml = '';
-  let codeAnimationInterval = null;
+  let codeLineCount = 0;
+  let codeAnimationTimer = null;
+  let codeCursorEl = null;
+
+  const resolvePanelWindowId = async () => {
+    if (typeof panelWindowId === 'number') {
+      return panelWindowId;
+    }
+    try {
+      const win = await chrome.windows.getCurrent();
+      if (win && typeof win.id === 'number') {
+        panelWindowId = win.id;
+        return panelWindowId;
+      }
+    } catch {
+      // Ignore failures; caller will handle null.
+    }
+    return null;
+  };
+
+  const normalizeSidePanelState = (rawState) => {
+    if (rawState && typeof rawState === 'object' && !Array.isArray(rawState)) {
+      return { ...rawState };
+    }
+    if (rawState === true) {
+      return { __legacy__: true };
+    }
+    return {};
+  };
+
+  const setSidePanelStateForCurrentWindow = async (isOpen) => {
+    try {
+      const windowId = await resolvePanelWindowId();
+      const stored = await chrome.storage.local.get(SIDE_PANEL_STATE_KEY);
+      const state = normalizeSidePanelState(stored?.[SIDE_PANEL_STATE_KEY]);
+      const key = typeof windowId === 'number' ? String(windowId) : null;
+      if (key) {
+        if (isOpen) {
+          state[key] = true;
+        } else {
+          delete state[key];
+        }
+        delete state.__legacy__;
+      } else if (isOpen) {
+        state.__legacy__ = true;
+      } else {
+        delete state.__legacy__;
+      }
+      await chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: state });
+    } catch {
+      // Ignore storage errors.
+    }
+  };
+
+  const stopCodeAnimation = () => {
+    if (codeAnimationTimer) {
+      clearTimeout(codeAnimationTimer);
+      codeAnimationTimer = null;
+    }
+    if (codeCursorEl) {
+      codeCursorEl.remove();
+      codeCursorEl = null;
+    }
+  };
+
+  const clearCodeView = () => {
+    stopCodeAnimation();
+    codeEditor.innerHTML = '';
+    codeLineCount = 0;
+  };
+
+  const appendCodeLine = (content, className = '') => {
+    const lineDiv = document.createElement('div');
+    lineDiv.className = className ? `code-line ${className}` : 'code-line';
+    const numberSpan = document.createElement('span');
+    numberSpan.className = 'line-number';
+    numberSpan.textContent = String(codeLineCount + 1);
+    const contentSpan = document.createElement('span');
+    contentSpan.className = 'line-content';
+    contentSpan.textContent = content;
+    lineDiv.appendChild(numberSpan);
+    lineDiv.appendChild(contentSpan);
+    codeEditor.appendChild(lineDiv);
+    codeLineCount += 1;
+    codeEditor.scrollTop = codeEditor.scrollHeight;
+    return lineDiv;
+  };
+
+  const setCodePlaceholder = (message) => {
+    clearCodeView();
+    if (message) {
+      appendCodeLine(`// ${message}`, 'status');
+    }
+  };
+
+  const logCodeStatus = (message) => {
+    if (!message) {
+      return;
+    }
+    appendCodeLine(`// ${message}`, 'status');
+  };
+
+  const appendBlankCodeLine = () => {
+    appendCodeLine('', 'status');
+  };
 
   const esc = (value = '') =>
     String(value).replace(/[&<>"']/g, (match) => ({
@@ -139,11 +254,11 @@
       updateStageDetail(stageId, detail);
     }
     
-    // Show/hide progress section based on stage
-    if (stageId === 'waiting' || stageId === 'complete') {
-      progressSection.classList.remove('visible');
-    } else {
-      progressSection.classList.add('visible');
+    // Progress section is now hidden - all status shown in code canvas
+    // Status updates are logged to code view for real-time feedback
+    const message = detail || STAGE_MESSAGES[stageId];
+    if (message) {
+      logCodeStatus(message);
     }
   };
 
@@ -174,66 +289,51 @@
   };
 
   const animateCodeGeneration = (html) => {
-    if (codeAnimationInterval) {
-      clearInterval(codeAnimationInterval);
+    stopCodeAnimation();
+    if (!html) {
+      return Promise.resolve();
     }
-    
-    const lines = html.split('\n');
-    let currentLine = 0;
-    
-    codeEditor.innerHTML = '';
-    
-    codeAnimationInterval = setInterval(() => {
-      if (currentLine < lines.length) {
-        const lineDiv = document.createElement('div');
-        lineDiv.className = 'code-line';
-        lineDiv.innerHTML = `
-          <span class="line-number">${currentLine + 1}</span>
-          <span class="line-content">${escapeHtml(lines[currentLine])}</span>
-        `;
-        codeEditor.appendChild(lineDiv);
-        
-        if (currentLine === lines.length - 1) {
-          // Add cursor on last line
-          const cursor = document.createElement('span');
-          cursor.className = 'code-cursor';
-          lineDiv.querySelector('.line-content').appendChild(cursor);
-        }
-        
-        codeEditor.scrollTop = codeEditor.scrollHeight;
-        currentLine++;
-      } else {
-        clearInterval(codeAnimationInterval);
-        codeAnimationInterval = null;
-      }
-    }, 20); // Fast animation
-  };
 
-  const escapeHtml = (text) => {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    const lines = html.split('\n');
+    let index = 0;
+
+    return new Promise((resolve) => {
+      const emitLine = () => {
+        if (index >= lines.length) {
+          stopCodeAnimation();
+          resolve();
+          return;
+        }
+        if (codeCursorEl) {
+          codeCursorEl.remove();
+          codeCursorEl = null;
+        }
+        const lineDiv = appendCodeLine(lines[index]);
+        const contentEl = lineDiv.querySelector('.line-content');
+        codeCursorEl = document.createElement('span');
+        codeCursorEl.className = 'code-cursor';
+        contentEl.appendChild(codeCursorEl);
+        index += 1;
+        codeAnimationTimer = setTimeout(emitLine, 25);
+      };
+
+      emitLine();
+    });
   };
 
   const showCompleteCode = (html) => {
-    if (codeAnimationInterval) {
-      clearInterval(codeAnimationInterval);
-      codeAnimationInterval = null;
-    }
-    
-    const lines = html.split('\n');
-    codeEditor.innerHTML = lines.map((line, index) => `
-      <div class="code-line">
-        <span class="line-number">${index + 1}</span>
-        <span class="line-content">${escapeHtml(line)}</span>
-      </div>
-    `).join('');
+    stopCodeAnimation();
+    clearCodeView();
+    const lines = (html || '').split('\n');
+    lines.forEach((line) => {
+      appendCodeLine(line);
+    });
   };
 
   const enableActions = (enabled) => {
     openFullButton.disabled = !enabled;
     downloadButton.disabled = !enabled;
-    codeTab.disabled = !enabled;
+    previewTab.disabled = !enabled;
   };
 
   const resetPreview = () => {
@@ -243,13 +343,14 @@
     previewRoot.innerHTML = '';
     previewPlaceholder.classList.remove('hidden');
     previewContent.style.display = 'none';
-    codeEditor.innerHTML = '<div class="code-line"><span class="line-number">1</span><span class="line-content">// Waiting for generation...</span></div>';
+    clearCodeView();
+    logCodeStatus('Waiting for Bento render request...');
+    logCodeStatus('Click "Render Bento Grid" in the popup to start.');
     enableActions(false);
     setProgress(0);
     setStage('waiting');
-    switchView('preview');
+    switchView('code');
     articleCard.classList.remove('visible');
-    progressSection.classList.remove('visible');
   };
 
   const formatArrayForPrompt = (value) => {
@@ -344,14 +445,15 @@ Task:
 
   const renderCard = (card) => {
     const sizeClass = COLS[card.size] || COLS.s;
-    const emphasis = card.emphasis === 'dark' ? 'darkcard' : 'card';
+    const baseClass = 'card';
+    const emphasisClass = card.emphasis === 'dark' ? 'darkcard' : '';
     const accentTitle = card.emphasis === 'accent' ? 'grad-text' : '';
     const tag = card.tag ? `<span class="tag">${esc(card.tag)}</span>` : '';
     const bodyClass = 'card-body';
     const listClass = `card-list${card.emphasis === 'dark' ? ' card-list--dark' : ''}`;
 
     let markup = `
-      <div class="${emphasis} ${sizeClass}">
+      <div class="${baseClass} ${emphasisClass} ${sizeClass}">
         ${tag}
         <h3 class="card-title ${accentTitle}">${esc(card.title)}</h3>
         ${card.body ? `<p class="${bodyClass}">${esc(card.body)}</p>` : ''}
@@ -401,7 +503,7 @@ Task:
     return markup;
   };
 
-  const renderPreview = (layout) => {
+  const renderPreview = (layout, htmlSnapshot) => {
     if (!layout || !Array.isArray(layout.cards)) {
       return;
     }
@@ -410,7 +512,7 @@ Task:
     previewContent.style.display = 'block';
     
     // Generate and store HTML
-    generatedHtml = buildExportHtml(layout, currentArticleMeta);
+    generatedHtml = htmlSnapshot || buildExportHtml(layout, currentArticleMeta);
   };
 
   const loadPayload = async (key) => {
@@ -420,11 +522,13 @@ Task:
 
   const persistResult = async (job, layout) => {
     const resultKey = `bento_payload_${job.id}`;
+    const htmlSnapshot = generatedHtml;
     const payload = {
       data: layout,
       article: job.articleMeta,
       summary: job.summaryBundle,
-      generatedAt: Date.now()
+      generatedAt: Date.now(),
+      html: htmlSnapshot
     };
 
     await chrome.storage.local.set({
@@ -435,7 +539,8 @@ Task:
         resultKey,
         article: job.articleMeta,
         generatedAt: payload.generatedAt
-      }
+      },
+      [BENTO_LAST_HTML_KEY]: htmlSnapshot
     });
     await chrome.storage.local.remove(BENTO_ACTIVE_JOB_KEY);
     return { resultKey, payload };
@@ -505,34 +610,77 @@ Task:
     jobInFlight = true;
     activeJobId = job.id;
     setJobMeta(job.articleMeta);
+    
+    // Always start with code view to show streaming updates
+    switchView('code');
     previewRoot.innerHTML = '';
     previewPlaceholder.classList.remove('hidden');
     previewContent.style.display = 'none';
     enableActions(false);
     setProgress(0);
+    clearCodeView();
+    
+    logCodeStatus('═══════════════════════════════════════');
+    logCodeStatus('Bento Grid Generation Started');
+    logCodeStatus('═══════════════════════════════════════');
+    appendBlankCodeLine();
+    
     setStage('preparing', 'Packaging summary payload…');
     setProgress(0.15);
     setStatusText('Packaging summary for Bento render…', 'active');
+    
     try {
       const layout = await generateBentoLayout(job.articleMeta, job.summaryBundle);
+      
       setStage('rendering', 'Rendering Bento preview…');
       setProgress(0.85);
       setStatusText('Rendering Bento grid…', 'active');
+      
+      appendBlankCodeLine();
+      logCodeStatus('Layout generated successfully!');
+      logCodeStatus(`Cards: ${layout.cards?.length || 0} items`);
+      appendBlankCodeLine();
+      
       renderPreview(layout);
-      
-      // Animate code generation
+
       setStatusText('Generating HTML code…', 'active');
-      animateCodeGeneration(generatedHtml);
+      logCodeStatus('═══════════════════════════════════════');
+      logCodeStatus('Streaming HTML Output');
+      logCodeStatus('═══════════════════════════════════════');
+      appendBlankCodeLine();
       
-      const { resultKey } = await persistResult(job, layout);
+      const persistPromise = persistResult(job, layout);
+      await animateCodeGeneration(generatedHtml);
+
+      const { resultKey } = await persistPromise;
       currentLayout = layout;
       currentResultKey = resultKey;
       enableActions(true);
       setProgress(1);
+      
+      appendBlankCodeLine();
+      logCodeStatus('═══════════════════════════════════════');
+      logCodeStatus('✓ Generation Complete');
+      logCodeStatus('═══════════════════════════════════════');
+      
       setStage('complete', 'Bento grid ready.');
       setStatusText('✓ Bento grid ready', 'success');
+      
+      // Auto-switch to preview after a brief delay to show completion
+      setTimeout(() => {
+        if (currentView === 'code') {
+          switchView('preview');
+        }
+      }, 800);
     } catch (error) {
       console.error('Bento generation error:', error);
+      stopCodeAnimation();
+      appendBlankCodeLine();
+      logCodeStatus('═══════════════════════════════════════');
+      logCodeStatus('✗ ERROR');
+      logCodeStatus('═══════════════════════════════════════');
+      logCodeStatus(`${error.message || 'Unable to render Bento grid.'}`);
+      appendBlankCodeLine();
       setStatusText(error.message || 'Unable to render Bento grid.', 'error');
       await chrome.storage.local.set({
         [job.id]: { ...job, status: 'error', error: error.message, completedAt: Date.now() }
@@ -563,7 +711,7 @@ Task:
       if (payload?.data) {
         currentLayout = payload.data;
         currentResultKey = job.resultKey;
-        renderPreview(payload.data);
+        renderPreview(payload.data, payload.html);
         showCompleteCode(generatedHtml);
         enableActions(true);
         setProgress(1);
@@ -579,28 +727,29 @@ Task:
   };
 
   const hydrateLastResult = async () => {
-    const stored = await chrome.storage.local.get(BENTO_LAST_RESULT_KEY);
+    const stored = await chrome.storage.local.get([BENTO_LAST_RESULT_KEY, BENTO_LAST_HTML_KEY]);
     const descriptor = stored[BENTO_LAST_RESULT_KEY];
     if (!descriptor || !descriptor.resultKey) {
       setStatusText('Waiting for a Bento request…');
-      resetPreview();
-      return;
+      return false;
     }
     const payload = await loadPayload(descriptor.resultKey);
     if (payload?.data) {
-      setJobMeta(payload.article || descriptor.article || {});
+      const articleMeta = payload.article || descriptor.article || {};
+      const htmlSnapshot = payload.html || stored[BENTO_LAST_HTML_KEY] || '';
+      setJobMeta(articleMeta);
       currentLayout = payload.data;
       currentResultKey = descriptor.resultKey;
-      renderPreview(payload.data);
+      renderPreview(payload.data, htmlSnapshot);
       showCompleteCode(generatedHtml);
       enableActions(true);
       setProgress(1);
       setStage('complete', 'Latest Bento grid ready.');
       setStatusText('Showing the most recent Bento grid.', 'success');
-    } else {
-      setStatusText('Waiting for a Bento request…');
-      resetPreview();
+      return true;
     }
+    setStatusText('Waiting for a Bento request…');
+    return false;
   };
 
   const handleOpenFull = async () => {
@@ -645,8 +794,11 @@ Task:
   .shell { max-width: 1100px; margin: 0 auto; padding: 32px 20px 64px; }
   .grad-text { background: linear-gradient(90deg,#C084FC,#7E22CE); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
   .grad-bg { background: linear-gradient(90deg,#C084FC,#7E22CE); }
-  .card { background:#fff; border:1px solid #f1f5f9; border-radius:20px; padding:24px; box-shadow:0 6px 18px rgba(15,23,42,0.08); }
-  .darkcard { background:#0f172a; color:#e2e8f0; border-color:#0f172a; }
+  .card { background:#fff; border:1px solid #f1f5f9; border-radius:20px; padding:24px; box-shadow:0 6px 18px rgba(15,23,42,0.08); transition:transform 0.2s ease,box-shadow 0.2s ease; }
+  .card:hover { transform:translateY(-4px); box-shadow:0 12px 20px -6px rgba(15,23,42,0.18); }
+  .darkcard { background:#0f172a; color:#e2e8f0; border:1px solid #1e293b; box-shadow:0 6px 18px rgba(15,23,42,0.12); }
+  .darkcard:hover { box-shadow:0 12px 20px -6px rgba(15,23,42,0.25); }
+  .darkcard .tag { background:rgba(255,255,255,0.1); color:#cbd5e1; }
   .tag { display:inline-block; padding:4px 12px; border-radius:999px; font-size:0.75rem; font-weight:600; background:#f1f5f9; color:#475569; text-transform:uppercase; letter-spacing:0.04em; }
   .grid { display:grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap:1rem; }
   @media (min-width:768px){ .grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
@@ -710,8 +862,10 @@ const renderCard = ${renderCard.toString()};
   };
 
   const bootstrap = async () => {
-    resetPreview();
-    await hydrateLastResult();
+    const hasResult = await hydrateLastResult();
+    if (!hasResult) {
+      resetPreview();
+    }
     const stored = await chrome.storage.local.get(BENTO_ACTIVE_JOB_KEY);
     if (stored[BENTO_ACTIVE_JOB_KEY]) {
       await hydrateJob(stored[BENTO_ACTIVE_JOB_KEY]);
@@ -751,18 +905,25 @@ const renderCard = ${renderCard.toString()};
   });
   
   previewTab.addEventListener('click', () => {
-    switchView('preview');
+    if (!previewTab.disabled) {
+      switchView('preview');
+    }
   });
 
   // Track side panel visibility state
-  const SIDE_PANEL_STATE_KEY = 'side_panel_open_state';
-  
-  // Mark panel as open when loaded
-  chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: true }).catch(() => {});
+  resolvePanelWindowId();
+  setSidePanelStateForCurrentWindow(true);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      setSidePanelStateForCurrentWindow(false);
+    } else if (document.visibilityState === 'visible') {
+      setSidePanelStateForCurrentWindow(true);
+    }
+  });
   
   // Mark panel as closed when the window/panel is about to unload
   const markPanelClosed = () => {
-    chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: false }).catch(() => {});
+    setSidePanelStateForCurrentWindow(false);
   };
   
   window.addEventListener('beforeunload', markPanelClosed);
@@ -780,7 +941,11 @@ const renderCard = ${renderCard.toString()};
       }
     }
     if (Object.prototype.hasOwnProperty.call(changes, BENTO_LAST_RESULT_KEY) && !jobInFlight) {
-      hydrateLastResult();
+      hydrateLastResult().then((hasResult) => {
+        if (!hasResult) {
+          resetPreview();
+        }
+      });
     }
   });
 

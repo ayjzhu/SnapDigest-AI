@@ -414,6 +414,25 @@ body.selection-preview {
   50% { opacity: 0.7; }
 }
 
+/* Badge generating animation */
+.badge.generating {
+  animation: badgeFlash 1.2s ease-in-out infinite;
+  font-weight: 600;
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+@keyframes badgeFlash {
+  0%, 100% { 
+    opacity: 1;
+    background: #dbeafe;
+  }
+  50% { 
+    opacity: 0.75;
+    background: #bfdbfe;
+  }
+}
+
 select {
   cursor: pointer;
   background: #f1f3f5;

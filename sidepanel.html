@@ -235,16 +235,43 @@
     font-size: 12px;
     line-height: 1.6;
     color: var(--code-text);
+    scroll-behavior: smooth;
+  }
+  .code-editor::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .code-editor::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+  }
+  .code-editor::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+  }
+  .code-editor::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
   }
   .code-line {
     display: flex;
     gap: 16px;
+    transition: background 0.15s ease;
+  }
+  .code-line:hover {
+    background: rgba(255, 255, 255, 0.03);
+  }
+  .code-line.status .line-content {
+    color: #94a3b8;
+    font-weight: 500;
+  }
+  .code-line.status .line-number {
+    color: #64748b;
   }
   .line-number {
     color: #858585;
     text-align: right;
     min-width: 30px;
     user-select: none;
+    font-variant-numeric: tabular-nums;
   }
   .line-content {
     flex: 1;
@@ -258,6 +285,7 @@
     background: var(--accent-blue);
     animation: blink 1s step-end infinite;
     vertical-align: text-bottom;
+    margin-left: 1px;
   }
   @keyframes blink {
     0%, 50% { opacity: 1; }
@@ -404,10 +432,24 @@
     min-height: 100px;
     word-wrap: break-word;
     overflow-wrap: break-word;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .preview-root .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
   }
   .preview-root .darkcard {
     background: #0f172a;
     color: #e2e8f0;
+    border: 1px solid #1e293b;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+  .preview-root .darkcard:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  }
+  .preview-root .darkcard .tag {
+    background: rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
   }
   .preview-root .tag {
     font-size: 9px;
@@ -500,8 +542,8 @@
     </div>
     <div class="header-actions">
       <div class="view-toggle" id="view-toggle">
-        <button id="code-tab" disabled>Code</button>
-        <button id="preview-tab" class="active">Preview</button>
+        <button id="code-tab" class="active">Code</button>
+        <button id="preview-tab" disabled>Preview</button>
       </div>
       <button class="icon-btn" id="open-full" disabled title="Open in new tab">
         <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
@@ -536,8 +578,8 @@
         <h2 class="article-title" id="article-title">No article selected</h2>
       </div>
       
-      <!-- Progress Section -->
-      <div class="progress-section" id="progress-section">
+      <!-- Progress Section - Hidden, status shown in code canvas -->
+      <div class="progress-section" id="progress-section" style="display: none;">
         <ul class="stage-list">
           <li class="stage active" data-stage="waiting">
             <span class="stage-dot"></span>
@@ -592,17 +634,17 @@
       </div>
       
       <!-- Code View -->
-      <div class="code-view" id="code-view">
+      <div class="code-view active" id="code-view">
         <div class="code-editor" id="code-editor">
           <div class="code-line">
             <span class="line-number">1</span>
-            <span class="line-content">// Generating HTML...</span>
+            <span class="line-content">// Waiting for generation...</span>
           </div>
         </div>
       </div>
       
       <!-- Preview View -->
-      <div class="preview-view active" id="preview-view">
+      <div class="preview-view" id="preview-view">
         <div class="preview-placeholder" id="preview-placeholder">
           Start a Bento render to see the live grid preview here.
         </div>
