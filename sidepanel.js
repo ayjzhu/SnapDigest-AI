@@ -78,6 +78,7 @@
   const previewTab = document.getElementById('preview-tab');
   const openFullButton = document.getElementById('open-full');
   const downloadButton = document.getElementById('download-html');
+  const copyCodeBtn = document.getElementById('copy-code-btn');
 
   const COLS = {
     s: 'card-span-s',
@@ -845,6 +846,39 @@ const renderCard = ${renderCard.toString()};
 </html>`;
   };
 
+  const handleCopyCode = async () => {
+    if (!generatedHtml) {
+      return;
+    }
+    
+    try {
+      await navigator.clipboard.writeText(generatedHtml);
+      
+      // Visual feedback - add copied class for animation
+      copyCodeBtn.classList.add('copied');
+      
+      // Update status message
+      statusMessageEl.textContent = 'Code copied to clipboard!';
+      statusMessageEl.setAttribute('data-tone', 'info');
+      statusMessageEl.classList.remove('hidden');
+      
+      // Remove feedback after animation
+      setTimeout(() => {
+        copyCodeBtn.classList.remove('copied');
+      }, 1200);
+      
+      // Hide status message after delay
+      setTimeout(() => {
+        statusMessageEl.classList.add('hidden');
+      }, 3000);
+    } catch (err) {
+      console.error('Failed to copy code:', err);
+      statusMessageEl.textContent = 'Failed to copy code';
+      statusMessageEl.setAttribute('data-tone', 'error');
+      statusMessageEl.classList.remove('hidden');
+    }
+  };
+
   const handleDownload = () => {
     if (!generatedHtml) {
       return;
@@ -897,6 +931,7 @@ const renderCard = ${renderCard.toString()};
   // Event Listeners
   openFullButton.addEventListener('click', handleOpenFull);
   downloadButton.addEventListener('click', handleDownload);
+  copyCodeBtn.addEventListener('click', handleCopyCode);
   
   codeTab.addEventListener('click', () => {
     if (!codeTab.disabled) {

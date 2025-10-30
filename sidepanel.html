@@ -142,7 +142,7 @@
   /* Canvas Container */
   .canvas-container {
     flex: 1;
-    margin: 16px;
+    margin: 12px;
     background: var(--canvas-bg);
     border: 1px solid var(--border);
     border-radius: 12px;
@@ -154,7 +154,7 @@
   
   /* Status Bar (inside canvas) */
   .status-bar {
-    padding: 12px 16px;
+    padding: 10px 12px;
     background: white;
     border-bottom: 1px solid var(--border);
     display: flex;
@@ -187,8 +187,8 @@
   
   /* Article Info Card */
   .article-card {
-    margin: 16px;
-    padding: 12px 16px;
+    margin: 12px 12px 8px 12px;
+    padding: 10px 12px;
     background: white;
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -218,10 +218,11 @@
     overflow: hidden;
     display: none;
     flex-direction: column;
-    margin: 16px;
+    margin: 8px 12px 12px 12px;
     background: var(--code-bg);
     border-radius: 10px;
     border: 1px solid var(--border);
+    position: relative;
   }
   .code-view.active {
     display: flex;
@@ -230,7 +231,8 @@
     flex: 1;
     background: var(--code-bg);
     overflow: auto;
-    padding: 16px;
+    padding: 12px;
+    padding-right: 48px; /* Space for copy button (28px) + safe margin (12px) + scrollbar clearance (8px) */
     font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
     font-size: 12px;
     line-height: 1.6;
@@ -238,19 +240,101 @@
     scroll-behavior: smooth;
   }
   .code-editor::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
   }
   .code-editor::-webkit-scrollbar-track {
     background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    margin: 4px 2px;
   }
   .code-editor::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
   }
   .code-editor::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.3);
+    border: 2px solid transparent;
+    background-clip: padding-box;
   }
+  
+  /* Copy button for code view */
+  .copy-code-btn {
+    position: absolute;
+    top: 12px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(30, 30, 30, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(4px);
+    z-index: 10;
+    opacity: 0.5;
+  }
+  
+  .code-view:hover .copy-code-btn {
+    opacity: 0.85;
+  }
+  
+  .copy-code-btn:hover {
+    opacity: 1;
+    background: rgba(40, 40, 40, 0.95);
+    border-color: rgba(99, 102, 241, 0.4);
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15), 0 1px 3px rgba(0, 0, 0, 0.3);
+    transform: scale(1.05);
+  }
+  
+  .copy-code-btn:active {
+    transform: scale(0.98);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+  
+  .copy-code-btn svg {
+    color: #9ca3af;
+    transition: color 0.2s ease-in-out;
+    width: 14px;
+    height: 14px;
+  }
+  
+  .copy-code-btn:hover svg {
+    color: #c7d2fe;
+  }
+  
+  /* Animation for successful copy */
+  @keyframes copySuccessCode {
+    0% {
+      background: rgba(16, 185, 129, 0.3);
+      border-color: #10b981;
+      transform: scale(1.1);
+    }
+    50% {
+      transform: scale(1.05);
+    }
+    100% {
+      background: rgba(30, 30, 30, 0.9);
+      border-color: rgba(255, 255, 255, 0.1);
+      transform: scale(1);
+    }
+  }
+  
+  .copy-code-btn.copied {
+    animation: copySuccessCode 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .copy-code-btn.copied svg {
+    color: #10b981;
+  }
+  
   .code-line {
     display: flex;
     gap: 16px;
@@ -320,7 +404,7 @@
   .preview-content {
     flex: 0 1 auto;
     overflow: visible;
-    padding: 16px;
+    padding: 12px;
     display: none;
   }
   .preview-content:empty {
@@ -329,7 +413,7 @@
   
   /* Progress Stages */
   .progress-section {
-    padding: 16px;
+    padding: 12px;
     display: none;
   }
   .progress-section.visible {
@@ -635,6 +719,12 @@
       
       <!-- Code View -->
       <div class="code-view active" id="code-view">
+        <button id="copy-code-btn" type="button" class="copy-code-btn" title="Copy code" aria-label="Copy generated code">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        </button>
         <div class="code-editor" id="code-editor">
           <div class="code-line">
             <span class="line-number">1</span>
