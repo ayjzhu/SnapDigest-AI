@@ -69,6 +69,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || typeof message !== 'object') {
     return;
   }
+  
+  if (message.type === 'GET_SIDE_PANEL_STATE') {
+    (async () => {
+      try {
+        const windowId = message.windowId || sender?.tab?.windowId || (await chrome.windows.getCurrent()).id;
+        const isOpen = await getSidePanelStateForWindow(windowId);
+        sendResponse({ isOpen });
+      } catch (error) {
+        console.error('Failed to get side panel state:', error);
+        sendResponse({ isOpen: false });
+      }
+    })();
+    return true;
+  }
+  
   if (message.type === 'BENTO_OPEN_PANEL') {
     (async () => {
       try {

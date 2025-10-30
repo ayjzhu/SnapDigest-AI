@@ -189,28 +189,37 @@ button:disabled {
 }
 
 .content-section + .content-section {
-  margin-top: 8px;
-  padding-top: 12px;
-  border-top: 2px solid #e9ecef;
+  margin-top: 12px;
+  padding-top: 16px;
+  border-top: 2px solid #f3f4f6;
 }
 
 .content-section h2 {
   font-size: 13px;
   font-weight: 600;
-  margin: 0;
-  color: #1d1d1f;
+  margin: 0 0 10px 0;
+  color: #111827;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  letter-spacing: -0.01em;
 }
 
 .content-section h2 .badge {
   font-size: 10px;
-  font-weight: 500;
-  color: #6c757d;
-  background: #e9ecef;
-  padding: 2px 6px;
-  border-radius: 4px;
+  font-weight: 600;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  letter-spacing: 0;
+}
+
+.text-container-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .text-container {
@@ -218,14 +227,132 @@ button:disabled {
   min-height: 120px;
   max-height: 250px;
   overflow-y: auto;
-  border: 1px solid #d0d7de;
-  border-radius: 8px;
-  padding: 12px;
-  background: #f8f9fa;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 14px 16px 16px 16px;
+  padding-right: 56px; /* Space for scrollbar (12px) + gap (12px) + copy button (28px) + margin (4px) */
+  background: linear-gradient(to bottom, #fafbfc, #f6f8fa);
   white-space: pre-wrap;
-  line-height: 1.5;
+  line-height: 1.6;
   font-size: 13px;
   scroll-behavior: smooth;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.text-container:hover {
+  border-color: #d1d5db;
+}
+
+.text-container:focus {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.04), 0 0 0 3px rgba(147, 197, 253, 0.1);
+}
+
+/* Modern scrollbar styling */
+.text-container::-webkit-scrollbar {
+  width: 12px;
+}
+
+.text-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 10px;
+  margin: 6px 0; /* Reduced margin for tighter fit */
+}
+
+.text-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  transition: background 0.2s ease;
+}
+
+.text-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+.copy-icon-btn {
+  position: absolute;
+  top: 8px;
+  right: 20px; /* Moved left to avoid scrollbar - gives 12px clearance from scrollbar */
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(4px);
+  z-index: 10;
+  opacity: 0.5;
+}
+
+.text-container-wrapper:hover .copy-icon-btn {
+  opacity: 0.85;
+}
+
+.copy-icon-btn:hover:not(:disabled) {
+  opacity: 1;
+  background: #ffffff;
+  border-color: #c7d2fe;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.12), 0 1px 3px rgba(0, 0, 0, 0.06);
+  transform: scale(1.05);
+}
+
+.copy-icon-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.copy-icon-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.copy-icon-btn svg {
+  color: #9ca3af;
+  transition: color 0.2s ease-in-out;
+  width: 14px;
+  height: 14px;
+}
+
+.copy-icon-btn:hover:not(:disabled) svg {
+  color: #4f46e5;
+}
+
+/* Animation for successful copy */
+@keyframes copySuccess {
+  0% {
+    background: #d1fae5;
+    border-color: #10b981;
+    transform: scale(1.1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: #e5e7eb;
+    transform: scale(1);
+  }
+}
+
+.copy-icon-btn.copied {
+  animation: copySuccess 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.copy-icon-btn.copied svg {
+  color: #10b981;
 }
 
 .exclusions {
@@ -387,14 +514,18 @@ body.selection-preview {
 }
 
 #summary-container {
-  background: #f0f4f8;
-  border-color: #b8cfe3;
-  border-width: 2px;
+  background: linear-gradient(to bottom, #eff6ff, #dbeafe);
+  border-color: #bfdbfe;
+  border-width: 1px;
+}
+
+#summary-container:hover {
+  border-color: #93c5fd;
 }
 
 #summary-container:empty::before {
   content: "No summary generated yet.";
-  color: #6c757d;
+  color: #9ca3af;
   font-style: italic;
 }
 

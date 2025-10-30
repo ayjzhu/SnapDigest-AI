@@ -1,7 +1,8 @@
 const extractButton = document.getElementById('extract-btn');
 const refineButton = document.getElementById('refine-btn');
 const resetButton = document.getElementById('reset-btn');
-const copyButton = document.getElementById('copy-btn');
+const copyTextButton = document.getElementById('copy-text-btn');
+const copySummaryButton = document.getElementById('copy-summary-btn');
 const downloadButton = document.getElementById('download-btn');
 const summarizeButton = document.getElementById('summarize-btn');
 const summaryType = document.getElementById('summary-type');
@@ -293,9 +294,23 @@ const updateSidePanelAccess = async () => {
   
   const windowId = await getCurrentWindowId();
   
-  // Check if side panel is currently open
+  // Request fresh state from background to ensure accuracy
   let isPanelOpen = false;
-  isPanelOpen = await getStoredSidePanelState(windowId);
+  try {
+    const response = await chrome.runtime.sendMessage({ 
+      type: 'GET_SIDE_PANEL_STATE', 
+      windowId 
+    });
+    if (response && typeof response.isOpen === 'boolean') {
+      isPanelOpen = response.isOpen;
+    } else {
+      // Fallback to stored state if background doesn't respond
+      isPanelOpen = await getStoredSidePanelState(windowId);
+    }
+  } catch (error) {
+    // Fallback to stored state if message fails
+    isPanelOpen = await getStoredSidePanelState(windowId);
+  }
   
   // Button is always enabled for toggling
   bentoOpenPanelButton.disabled = false;
@@ -744,7 +759,7 @@ const populateText = ({ text, title, url, excludedCount = 0, excluded = [] }) =>
     textBadge.textContent = '';
   }
   
-  copyButton.disabled = !hasText;
+  if (copyTextButton) copyTextButton.disabled = !hasText;
   downloadButton.disabled = !hasText;
   summarizeButton.disabled = !hasText;
   resetButton.disabled = excludedCount === 0;
@@ -770,7 +785,7 @@ const setupCollapsibleSections = () => {
 };
 
 const extractPageText = async (clearSummary = true) => {
-  copyButton.disabled = true;
+  if (copyTextButton) copyTextButton.disabled = true;
   downloadButton.disabled = true;
   summarizeButton.disabled = true;
   refineButton.disabled = true;
@@ -794,6 +809,7 @@ const extractPageText = async (clearSummary = true) => {
       summaryContainer.textContent = '';
       summarySection.hidden = true;
       summaryBadge.textContent = '';
+      if (copySummaryButton) copySummaryButton.disabled = true;
       clearBentoState(true);
       refreshBentoControls();
       
@@ -812,7 +828,7 @@ const extractPageText = async (clearSummary = true) => {
     setStatus(error.message || 'Unable to extract text.', 'error');
   } finally {
     const hasText = latestText.length > 0;
-    copyButton.disabled = !hasText;
+    if (copyTextButton) copyTextButton.disabled = !hasText;
     downloadButton.disabled = !hasText;
     summarizeButton.disabled = !hasText;
     refineButton.disabled = !hasText && !selectionActive;
@@ -833,7 +849,7 @@ const updateSelectionUI = (active) => {
   if (active) {
     clearPreviewTimer();
     minimizePopup();
-    copyButton.disabled = true;
+    if (copyTextButton) copyTextButton.disabled = true;
     downloadButton.disabled = true;
     summarizeButton.disabled = true;
     resetButton.disabled = true;
@@ -842,7 +858,7 @@ const updateSelectionUI = (active) => {
     clearPreviewTimer();
     document.body.classList.remove('selection-preview');
     restorePopup(true);
-    copyButton.disabled = !latestText;
+    if (copyTextButton) copyTextButton.disabled = !latestText;
     downloadButton.disabled = !latestText;
     summarizeButton.disabled = !latestText;
     resetButton.disabled = latestExcludedCount === 0;
@@ -956,13 +972,42 @@ const handleMessage = (message, sender) => {
   }
 };
 
-const handleCopy = async () => {
+const handleCopyText = async () => {
   if (!latestText) {
     return;
   }
   try {
     await navigator.clipboard.writeText(latestText);
-    setStatus('Copied to clipboard.', 'info');
+    setStatus('Extracted text copied to clipboard.', 'info');
+    
+    // Visual feedback on button
+    if (copyTextButton) {
+      copyTextButton.classList.add('copied');
+      setTimeout(() => {
+        copyTextButton.classList.remove('copied');
+      }, 600);
+    }
+  } catch (error) {
+    console.error(error);
+    setStatus('Clipboard copy failed.', 'error');
+  }
+};
+
+const handleCopySummary = async () => {
+  if (!latestSummary) {
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(latestSummary);
+    setStatus('Summary copied to clipboard.', 'info');
+    
+    // Visual feedback on button
+    if (copySummaryButton) {
+      copySummaryButton.classList.add('copied');
+      setTimeout(() => {
+        copySummaryButton.classList.remove('copied');
+      }, 600);
+    }
   } catch (error) {
     console.error(error);
     setStatus('Clipboard copy failed.', 'error');
@@ -1026,6 +1071,10 @@ const displaySummary = (summary, type, length) => {
   // Update summary badge
   const wordCount = summary.trim().split(/\s+/).length;
   summaryBadge.textContent = `${wordCount} words · ${type} · ${length}`;
+  
+  // Enable copy summary button
+  if (copySummaryButton) copySummaryButton.disabled = false;
+  
   refreshBentoControls();
 };
 
@@ -1183,6 +1232,13 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   }
 });
 
+// Refresh side panel state when popup becomes visible
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    updateSidePanelAccess();
+  }
+});
+
 chrome.runtime.onMessage.addListener(handleMessage);
 extractButton.addEventListener('click', () => extractPageText(true));
 refineButton.addEventListener('click', toggleSelectionMode);
@@ -1208,6 +1264,7 @@ resetButton.addEventListener('click', async () => {
     summaryContainer.textContent = '';
     summarySection.hidden = true;
     summaryBadge.textContent = '';
+    if (copySummaryButton) copySummaryButton.disabled = true;
     clearBentoState(true);
     refreshBentoControls();
     
@@ -1217,7 +1274,8 @@ resetButton.addEventListener('click', async () => {
     setStatus(error.message || 'Unable to reset.', 'error', false);
   }
 });
-copyButton.addEventListener('click', handleCopy);
+if (copyTextButton) copyTextButton.addEventListener('click', handleCopyText);
+if (copySummaryButton) copySummaryButton.addEventListener('click', handleCopySummary);
 downloadButton.addEventListener('click', handleDownload);
 summarizeButton.addEventListener('click', handleSummarize);
 bentoButton?.addEventListener('click', handleGenerateBentoRequest);
@@ -1229,7 +1287,11 @@ const initializePopup = async () => {
   setupCollapsibleSections();
   await hydrateBentoLink();
   await hydrateBentoJobState();
+  
+  // Update side panel state with fresh query from background
+  // This ensures the button shows the correct state on popup open
   await updateSidePanelAccess();
+  
   refreshBentoControls();
   
   // Try to load saved summary first
