@@ -1,7 +1,8 @@
 const extractButton = document.getElementById('extract-btn');
 const refineButton = document.getElementById('refine-btn');
 const resetButton = document.getElementById('reset-btn');
-const copyButton = document.getElementById('copy-btn');
+const copyTextButton = document.getElementById('copy-text-btn');
+const copySummaryButton = document.getElementById('copy-summary-btn');
 const downloadButton = document.getElementById('download-btn');
 const summarizeButton = document.getElementById('summarize-btn');
 const summaryType = document.getElementById('summary-type');
@@ -13,6 +14,9 @@ const textContainer = document.getElementById('text-container');
 const textSection = document.getElementById('text-section');
 const textBadge = document.getElementById('text-badge');
 const metadataElement = document.getElementById('metadata');
+const bentoButton = document.getElementById('bento-btn');
+const bentoOpenPanelButton = document.getElementById('bento-open-panel-btn');
+const bentoLink = document.getElementById('bento-link');
 const statusElement = document.getElementById('status');
 const countElement = document.getElementById('count');
 const exclusionSection = document.getElementById('exclusion-section');
@@ -78,6 +82,126 @@ const STATUS_COLORS = {
   notice: '#2563eb'
 };
 
+const BENTO_BUTTON_LABEL_DEFAULT = (bentoButton?.textContent || 'Render Bento Grid').trim();
+const BENTO_BUTTON_LABEL_WORKING = 'Opening side panel…';
+const BENTO_PANEL_BUTTON_LABEL_OPEN = 'Open Side Panel';
+const BENTO_PANEL_BUTTON_LABEL_CLOSE = 'Hide Side Panel';
+const BENTO_PANEL_BUTTON_TOOLTIP_OPEN = 'Show the side panel';
+const BENTO_PANEL_BUTTON_TOOLTIP_CLOSE = 'Hide the side panel';
+const BENTO_PANEL_BUTTON_LABEL_WORKING = 'Working…';
+const BENTO_ACTIVE_JOB_KEY = 'bento_active_job';
+const BENTO_LAST_RESULT_KEY = 'bento_last_result';
+const SIDE_PANEL_STATE_KEY = 'side_panel_open_state';
+
+const normalizeSidePanelState = (rawState) => {
+  if (rawState && typeof rawState === 'object' && !Array.isArray(rawState)) {
+    return { ...rawState };
+  }
+  if (rawState === true) {
+    return { __legacy__: true };
+  }
+  return {};
+};
+
+const getCurrentWindowId = async () => {
+  try {
+    const win = await chrome.windows.getCurrent();
+    if (win && typeof win.id === 'number') {
+      return win.id;
+    }
+  } catch {
+    // Ignore lookup failures.
+  }
+  return null;
+};
+
+const isSidePanelOpenInState = (state, windowId) => {
+  if (typeof windowId === 'number') {
+    const key = String(windowId);
+    if (Object.prototype.hasOwnProperty.call(state, key)) {
+      return Boolean(state[key]);
+    }
+  }
+  return Boolean(state.__legacy__);
+};
+
+const getStoredSidePanelState = async (windowId) => {
+  try {
+    const stored = await chrome.storage.local.get(SIDE_PANEL_STATE_KEY);
+    const state = normalizeSidePanelState(stored?.[SIDE_PANEL_STATE_KEY]);
+    return isSidePanelOpenInState(state, windowId);
+  } catch {
+    return false;
+  }
+};
+
+const setStoredSidePanelState = async (windowId, isOpen) => {
+  try {
+    const stored = await chrome.storage.local.get(SIDE_PANEL_STATE_KEY);
+    const state = normalizeSidePanelState(stored?.[SIDE_PANEL_STATE_KEY]);
+    if (typeof windowId === 'number') {
+      const key = String(windowId);
+      if (isOpen) {
+        state[key] = true;
+      } else {
+        delete state[key];
+      }
+      delete state.__legacy__;
+    } else if (isOpen) {
+      state.__legacy__ = true;
+    } else {
+      delete state.__legacy__;
+    }
+    await chrome.storage.local.set({ [SIDE_PANEL_STATE_KEY]: state });
+  } catch {
+    // Ignore storage update failures.
+  }
+};
+
+const INTERNAL_PAGE_PROTOCOLS = new Set([
+  'about:',
+  'chrome:',
+  'chrome-error:',
+  'chrome-extension:',
+  'chrome-native:',
+  'chrome-untrusted:',
+  'data:',
+  'devtools:',
+  'edge:',
+  'view-source:'
+]);
+
+const RESTRICTED_HOSTS = new Set(['chrome.google.com']);
+
+const getTabAccessError = (tab) => {
+  const url = tab?.url || '';
+  if (!url) {
+    return 'Unable to detect the active tab URL.';
+  }
+  try {
+    const parsed = new URL(url);
+    const protocol = parsed.protocol;
+    if (INTERNAL_PAGE_PROTOCOLS.has(protocol)) {
+      return 'Chrome blocks extensions from running on internal pages. Switch to a normal website and try again.';
+    }
+    if (protocol === 'file:') {
+      return 'Chrome requires “Allow access to file URLs” to be enabled for this extension before it can read local files.';
+    }
+    if (RESTRICTED_HOSTS.has(parsed.hostname)) {
+      return 'Chrome Web Store pages do not allow extensions to inject code. Open a different site and try again.';
+    }
+  } catch {
+    return 'Unable to access the active tab.';
+  }
+  return null;
+};
+
+if (bentoOpenPanelButton) {
+  bentoOpenPanelButton.removeAttribute('title');
+  bentoOpenPanelButton.dataset.tooltip = BENTO_PANEL_BUTTON_TOOLTIP_OPEN;
+  bentoOpenPanelButton.setAttribute('aria-label', BENTO_PANEL_BUTTON_TOOLTIP_OPEN);
+}
+
 const injectedTabs = new Set();
 const fallbackWidth = Math.max(360, (window.outerWidth || document.documentElement.offsetWidth || 320) + 40);
 const fallbackHeight = Math.max(260, (window.outerHeight || document.documentElement.offsetHeight || 320) + 40);
@@ -91,9 +215,15 @@ let latestSummaryType = '';
 let latestSummaryLength = '';
 let selectionActive = false;
 let currentTabId = null;
+let currentTabUrl = '';
 let minimized = false;
 let previewTimer = null;
 let pendingPreview = false;
+let latestArticleTitle = '';
+let latestArticleUrl = '';
+let bentoInProgress = false;
+let bentoJobActive = false;
+let bentoResultAvailable = false;
 
 const PREVIEW_DURATION_MS = 1700;
 
@@ -101,6 +231,363 @@ const setStatus = (message, tone = 'info', streaming = false) => {
   statusElement.textContent = message || '';
   statusElement.style.color = STATUS_COLORS[tone] || STATUS_COLORS.info;
   statusElement.classList.toggle('streaming', streaming);
+};
+
+const getSiteNameFromUrl = (url = '') => {
+  if (!url) {
+    return '';
+  }
+  try {
+    const hostname = new URL(url).hostname || '';
+    return hostname.replace(/^www\./i, '');
+  } catch {
+    return '';
+  }
+};
+
+const getArticleMeta = () => {
+  const url = latestArticleUrl || '';
+  return {
+    title: latestArticleTitle || '',
+    url,
+    siteName: getSiteNameFromUrl(url)
+  };
+};
+
+const deriveSummaryForPrompt = () => {
+  const summaryText = (latestSummary || '').trim();
+  const normalized = summaryText.replace(/\r\n/g, '\n');
+  const bulletCandidates = normalized
+    .split('\n')
+    .map((line) => line.replace(/^[\s•*-]+/, '').trim())
+    .filter(Boolean);
+  const sentenceCandidates = summaryText
+    ? summaryText
+        .replace(/\s+/g, ' ')
+        .split(/(?<=[.!?])\s+/)
+        .map((segment) => segment.trim())
+        .filter(Boolean)
+    : [];
+  const fallbackHeadline = sentenceCandidates[0] || bulletCandidates[0] || latestArticleTitle || 'Article digest';
+  const abstract = sentenceCandidates.slice(0, 2).join(' ') || summaryText || fallbackHeadline;
+  let bullets = bulletCandidates;
+  if (!bullets.length) {
+    bullets = sentenceCandidates;
+  }
+  if (!bullets.length && summaryText) {
+    bullets = [summaryText];
+  }
+  return {
+    headline: fallbackHeadline,
+    abstract,
+    bullets: bullets.slice(0, 8),
+    quotes: [],
+    stats: [],
+    links: []
+  };
+};
+
+const updateSidePanelAccess = async () => {
+  if (!bentoOpenPanelButton) {
+    return;
+  }
+  
+  const windowId = await getCurrentWindowId();
+  
+  // Request fresh state from background to ensure accuracy
+  let isPanelOpen = false;
+  try {
+    const response = await chrome.runtime.sendMessage({ 
+      type: 'GET_SIDE_PANEL_STATE', 
+      windowId 
+    });
+    if (response && typeof response.isOpen === 'boolean') {
+      isPanelOpen = response.isOpen;
+    } else {
+      // Fallback to stored state if background doesn't respond
+      isPanelOpen = await getStoredSidePanelState(windowId);
+    }
+  } catch (error) {
+    // Fallback to stored state if message fails
+    isPanelOpen = await getStoredSidePanelState(windowId);
+  }
+  
+  // Button is always enabled for toggling
+  bentoOpenPanelButton.disabled = false;
+  
+  // Update button text based on state
+  const labelElement = bentoOpenPanelButton.querySelector('.label');
+  if (labelElement) {
+    labelElement.textContent = isPanelOpen ? BENTO_PANEL_BUTTON_LABEL_CLOSE : BENTO_PANEL_BUTTON_LABEL_OPEN;
+  }
+  
+  // Update tooltip
+  const tooltip = isPanelOpen ? BENTO_PANEL_BUTTON_TOOLTIP_CLOSE : BENTO_PANEL_BUTTON_TOOLTIP_OPEN;
+  bentoOpenPanelButton.setAttribute('aria-label', tooltip);
+  bentoOpenPanelButton.dataset.tooltip = tooltip;
+  
+  // Add visual indicator class when panel is open
+  bentoOpenPanelButton.classList.toggle('panel-is-open', isPanelOpen);
+};
+
+const applyBentoLink = (descriptor) => {
+  if (!bentoLink) {
+    return;
+  }
+  if (descriptor && descriptor.resultKey) {
+    const viewerUrl = chrome.runtime.getURL(`bento.html#${encodeURIComponent(descriptor.resultKey)}`);
+    bentoLink.href = viewerUrl;
+    bentoLink.hidden = false;
+    bentoResultAvailable = true;
+  } else {
+    bentoLink.hidden = true;
+    bentoLink.removeAttribute('href');
+    bentoResultAvailable = false;
+  }
+  updateSidePanelAccess();
+};
+
+const hydrateBentoLink = async () => {
+  try {
+    const stored = await chrome.storage.local.get(BENTO_LAST_RESULT_KEY);
+    applyBentoLink(stored[BENTO_LAST_RESULT_KEY]);
+  } catch {
+    applyBentoLink(null);
+  }
+};
+
+const hydrateBentoJobState = async () => {
+  try {
+    const stored = await chrome.storage.local.get(BENTO_ACTIVE_JOB_KEY);
+    bentoJobActive = Boolean(stored[BENTO_ACTIVE_JOB_KEY]);
+  } catch {
+    bentoJobActive = false;
+  }
+  updateSidePanelAccess();
+};
+
+const requestSidePanel = async () => {
+  const windowInfo = await chrome.windows.getCurrent().catch(() => null);
+  const windowId = windowInfo?.id;
+
+  if (!chrome?.sidePanel?.open) {
+    if (!chrome?.runtime?.sendMessage) {
+      throw new Error('Side panel API is not available in this context.');
+    }
+    const message = { type: 'BENTO_OPEN_PANEL' };
+    if (windowId) {
+      message.windowId = windowId;
+    }
+    const result = await chrome.runtime.sendMessage(message).catch((error) => {
+      throw new Error(error?.message || 'Unable to open the side panel.');
+    });
+    if (result && result.ok === false) {
+      throw new Error(result.error || 'Unable to open the side panel.');
+    }
+    await setStoredSidePanelState(windowId ?? null, true);
+    return;
+  }
+
+  if (!windowId) {
+    throw new Error('Unable to determine the window ID.');
+  }
+
+  try {
+    await chrome.sidePanel.open({ windowId });
+  } catch (error) {
+    throw new Error(error?.message || 'Unable to open the side panel.');
+  }
+  await setStoredSidePanelState(windowId, true);
+};
+
+const queueBentoJob = async () => {
+  const trimmedSummary = (latestSummary || '').trim();
+  if (!trimmedSummary) {
+    throw new Error('Generate a summary before rendering the Bento view.');
+  }
+  const articleMeta = getArticleMeta();
+  if (!articleMeta.url) {
+    throw new Error('Missing article URL. Re-run extraction and summary.');
+  }
+  const tabId = await ensureCurrentTab();
+  const active = await chrome.storage.local.get(BENTO_ACTIVE_JOB_KEY);
+  if (active[BENTO_ACTIVE_JOB_KEY]) {
+    bentoJobActive = true;
+    updateSidePanelAccess();
+    return { jobId: active[BENTO_ACTIVE_JOB_KEY], reused: true };
+  }
+  const summaryBundle = deriveSummaryForPrompt();
+  const jobId = `bento_job_${Date.now()}`;
+  const payload = {
+    id: jobId,
+    tabId,
+    status: 'pending',
+    articleMeta,
+    summaryBundle,
+    summaryMeta: {
+      type: latestSummaryType,
+      length: latestSummaryLength
+    },
+    createdAt: Date.now()
+  };
+  await chrome.storage.local.set({
+    [jobId]: payload,
+    [BENTO_ACTIVE_JOB_KEY]: jobId
+  });
+  bentoJobActive = true;
+  updateSidePanelAccess();
+  try {
+    await chrome.storage.local.remove(BENTO_LAST_RESULT_KEY);
+  } catch (error) {
+    console.warn('Failed to clear previous Bento result:', error);
+  }
+  return { jobId, reused: false };
+};
+
+const clearBentoState = (removeStored = false) => {
+  if (removeStored) {
+    chrome.storage.local.remove(BENTO_LAST_RESULT_KEY).catch(() => {});
+  }
+  applyBentoLink(null);
+};
+
+const refreshBentoControls = () => {
+  if (!bentoButton) {
+    updateSidePanelAccess();
+    return;
+  }
+  if (bentoInProgress) {
+    bentoButton.disabled = true;
+    updateSidePanelAccess();
+    return;
+  }
+  const hasSummary = Boolean(latestSummary && latestSummary.trim().length);
+  bentoButton.disabled = !hasSummary;
+  if (!hasSummary) {
+    clearBentoState(true);
+  }
+  updateSidePanelAccess();
+};
+
+const setBentoButtonState = (inProgress) => {
+  if (!bentoButton) {
+    return;
+  }
+  bentoInProgress = inProgress;
+  bentoButton.textContent = inProgress ? BENTO_BUTTON_LABEL_WORKING : BENTO_BUTTON_LABEL_DEFAULT;
+  if (inProgress) {
+    bentoButton.disabled = true;
+  } else {
+    refreshBentoControls();
+  }
+};
+
+const handleGenerateBentoRequest = async () => {
+  if (!bentoButton) {
+    return;
+  }
+  setBentoButtonState(true);
+  try {
+    const { reused } = await queueBentoJob();
+    if (!reused) {
+      applyBentoLink(null);
+    }
+    await requestSidePanel();
+    setStatus(
+      reused
+        ? 'Bento render already running in the side panel.'
+        : 'Bento render started in the side panel.',
+      'notice'
+    );
+  } catch (error) {
+    console.error('Failed to launch Bento builder:', error);
+    setStatus(error.message || 'Unable to launch Bento builder.', 'error');
+  } finally {
+    setBentoButtonState(false);
+  }
+};
+
+const toggleSidePanel = async () => {
+  const windowId = await getCurrentWindowId();
+
+  let isPanelOpen = false;
+  isPanelOpen = await getStoredSidePanelState(windowId);
+
+  if (!chrome?.sidePanel?.open) {
+    if (!chrome?.runtime?.sendMessage) {
+      throw new Error('Side panel API is not available in this context.');
+    }
+    const fallbackMessage = { type: 'BENTO_TOGGLE_PANEL' };
+    if (windowId) {
+      fallbackMessage.windowId = windowId;
+    }
+    const result = await chrome.runtime.sendMessage(fallbackMessage).catch((error) => {
+      throw new Error(error?.message || 'Unable to toggle the side panel.');
+    });
+    if (result && result.ok === false) {
+      throw new Error(result.error || 'Unable to toggle the side panel.');
+    }
+    return;
+  }
+
+  if (!windowId) {
+    throw new Error('Unable to determine the window ID.');
+  }
+
+  if (isPanelOpen) {
+    try {
+      await chrome.runtime.sendMessage({ type: 'CLOSE_SIDE_PANEL_INTERNAL' });
+    } catch {
+      // Ignore errors if the panel context is already gone.
+    }
+    await setStoredSidePanelState(windowId, false);
+    return;
+  }
+
+  try {
+    await chrome.sidePanel.open({ windowId });
+  } catch (error) {
+    throw new Error(error?.message || 'Unable to open the side panel.');
+  }
+  await setStoredSidePanelState(windowId, true);
+};
+
+const handleOpenSidePanelOnly = async () => {
+  if (!bentoOpenPanelButton) {
+    return;
+  }
+  
+  bentoOpenPanelButton.disabled = true;
+  const labelElement = bentoOpenPanelButton.querySelector('.label');
+  
+  if (labelElement) {
+    labelElement.textContent = BENTO_PANEL_BUTTON_LABEL_WORKING;
+  }
+  bentoOpenPanelButton.setAttribute('aria-label', BENTO_PANEL_BUTTON_LABEL_WORKING);
+  bentoOpenPanelButton.dataset.tooltip = BENTO_PANEL_BUTTON_LABEL_WORKING;
+  
+  try {
+    await toggleSidePanel();
+    setStatus('Side panel toggled.', 'notice');
+  } catch (error) {
+    console.error('Failed to toggle side panel:', error);
+    setStatus(error.message || 'Unable to toggle the side panel.', 'error');
+  } finally {
+    // Small delay to let the state update
+    setTimeout(async () => {
+      await updateSidePanelAccess();
+    }, 300);
+  }
+};
+
+const ensureCurrentTab = async () => {
+  if (currentTabId) {
+    return currentTabId;
+  }
+  const tab = await getActiveTab();
+  currentTabId = tab.id;
+  currentTabUrl = tab.url || currentTabUrl;
+  return currentTabId;
 };
 
 const getActiveTab = () =>
@@ -118,12 +605,31 @@ const getActiveTab = () =>
     });
   });
 
+const getTabById = (tabId) =>
+  new Promise((resolve, reject) => {
+    chrome.tabs.get(tabId, (tab) => {
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      resolve(tab);
+    });
+  });
+
 const ensureContentScript = async (tabId) => {
   if (injectedTabs.has(tabId)) {
     return;
   }
-  await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
-  injectedTabs.add(tabId);
+  try {
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+    injectedTabs.add(tabId);
+  } catch (error) {
+    const message = error?.message || error?.toString?.() || 'Unable to inject content script.';
+    if (message.includes('Cannot access contents of the page') || message.includes('Cannot access contents of url')) {
+      throw new Error('Chrome blocks extensions from running on this page. Open a normal website and try again.');
+    }
+    throw error instanceof Error ? error : new Error(message);
+  }
 };
 
 const sendMessageToTab = (tabId, message, attempt = 0) =>
@@ -230,6 +736,8 @@ const renderExclusions = (items = []) => {
 const populateText = ({ text, title, url, excludedCount = 0, excluded = [] }) => {
   latestText = text || '';
   latestExcludedCount = excludedCount;
+  latestArticleTitle = title || '';
+  latestArticleUrl = url || '';
   textContainer.textContent = latestText;
   metadataElement.textContent = title ? `${title} — ${url}` : url;
   updateCounts(latestText, excludedCount);
@@ -251,7 +759,7 @@ const populateText = ({ text, title, url, excludedCount = 0, excluded = [] }) =>
     textBadge.textContent = '';
   }
   
-  copyButton.disabled = !hasText;
+  if (copyTextButton) copyTextButton.disabled = !hasText;
   downloadButton.disabled = !hasText;
   summarizeButton.disabled = !hasText;
   resetButton.disabled = excludedCount === 0;
@@ -263,6 +771,10 @@ const populateText = ({ text, title, url, excludedCount = 0, excluded = [] }) =>
     setStatus('Extraction complete.');
     restorePopup(true);
   }
+  if (!hasText) {
+    clearBentoState(true);
+  }
+  refreshBentoControls();
 };
 
 const setupCollapsibleSections = () => {
@@ -273,40 +785,55 @@ const setupCollapsibleSections = () => {
 };
 
 const extractPageText = async (clearSummary = true) => {
-  copyButton.disabled = true;
+  if (copyTextButton) copyTextButton.disabled = true;
   downloadButton.disabled = true;
   summarizeButton.disabled = true;
   refineButton.disabled = true;
   resetButton.disabled = true;
   
-  // Clear old summary when extracting new text (but not on initial load)
-  if (clearSummary) {
-    latestSummary = '';
-    latestSummaryType = '';
-    latestSummaryLength = '';
-    summaryContainer.textContent = '';
-    summarySection.hidden = true;
-    summaryBadge.textContent = '';
-    
-    // Clear stored summary
-    try {
-      const tab = await getActiveTab();
-      const key = `summary_${tab.id}`;
-      await chrome.storage.local.remove(key);
-    } catch (error) {
-      console.warn('Failed to clear summary:', error);
-    }
-  }
-  
   setStatus('Extracting…', 'notice');
   try {
     const tab = await getActiveTab();
     currentTabId = tab.id;
+    currentTabUrl = tab.url || currentTabUrl;
+
+    const accessError = getTabAccessError(tab);
+    if (accessError) {
+      throw new Error(accessError);
+    }
+
+    if (clearSummary) {
+      latestSummary = '';
+      latestSummaryType = '';
+      latestSummaryLength = '';
+      summaryContainer.textContent = '';
+      summarySection.hidden = true;
+      summaryBadge.textContent = '';
+      if (copySummaryButton) copySummaryButton.disabled = true;
+      clearBentoState(true);
+      refreshBentoControls();
+      
+      try {
+        const key = `summary_${tab.id}`;
+        await chrome.storage.local.remove(key);
+      } catch (error) {
+        console.warn('Failed to clear summary:', error);
+      }
+    }
+
     await ensureContentScript(tab.id);
     await sendMessageToTab(tab.id, { type: COMMAND_TYPES.EXTRACT });
   } catch (error) {
     console.error(error);
     setStatus(error.message || 'Unable to extract text.', 'error');
+  } finally {
+    const hasText = latestText.length > 0;
+    if (copyTextButton) copyTextButton.disabled = !hasText;
+    downloadButton.disabled = !hasText;
+    summarizeButton.disabled = !hasText;
+    refineButton.disabled = !hasText && !selectionActive;
+    resetButton.disabled = latestExcludedCount === 0;
+    refreshBentoControls();
   }
 };
 
@@ -322,7 +849,7 @@ const updateSelectionUI = (active) => {
   if (active) {
     clearPreviewTimer();
     minimizePopup();
-    copyButton.disabled = true;
+    if (copyTextButton) copyTextButton.disabled = true;
     downloadButton.disabled = true;
     summarizeButton.disabled = true;
     resetButton.disabled = true;
@@ -331,7 +858,7 @@ const updateSelectionUI = (active) => {
     clearPreviewTimer();
     document.body.classList.remove('selection-preview');
     restorePopup(true);
-    copyButton.disabled = !latestText;
+    if (copyTextButton) copyTextButton.disabled = !latestText;
     downloadButton.disabled = !latestText;
     summarizeButton.disabled = !latestText;
     resetButton.disabled = latestExcludedCount === 0;
@@ -340,10 +867,25 @@ const updateSelectionUI = (active) => {
 
 const toggleSelectionMode = async () => {
   try {
-    const tab = currentTabId
-      ? { id: currentTabId }
-      : await getActiveTab();
+    let tab = null;
+    if (currentTabId) {
+      try {
+        tab = await getTabById(currentTabId);
+      } catch {
+        tab = null;
+      }
+    }
+    if (!tab) {
+      tab = await getActiveTab();
+    }
     currentTabId = tab.id;
+    currentTabUrl = tab.url || currentTabUrl;
+
+    const accessError = getTabAccessError(tab);
+    if (accessError) {
+      throw new Error(accessError);
+    }
+
     await ensureContentScript(tab.id);
     const command = selectionActive ? COMMAND_TYPES.STOP_SELECTION : COMMAND_TYPES.START_SELECTION;
     await sendMessageToTab(tab.id, { type: command });
@@ -381,6 +923,7 @@ const handleMessage = (message, sender) => {
 
   if (sender?.tab?.id) {
     currentTabId = sender.tab.id;
+    currentTabUrl = sender.tab.url || currentTabUrl;
   }
 
   switch (message.type) {
@@ -429,13 +972,42 @@ const handleMessage = (message, sender) => {
   }
 };
 
-const handleCopy = async () => {
+const handleCopyText = async () => {
   if (!latestText) {
     return;
   }
   try {
     await navigator.clipboard.writeText(latestText);
-    setStatus('Copied to clipboard.', 'info');
+    setStatus('Extracted text copied to clipboard.', 'info');
+    
+    // Visual feedback on button
+    if (copyTextButton) {
+      copyTextButton.classList.add('copied');
+      setTimeout(() => {
+        copyTextButton.classList.remove('copied');
+      }, 600);
+    }
+  } catch (error) {
+    console.error(error);
+    setStatus('Clipboard copy failed.', 'error');
+  }
+};
+
+const handleCopySummary = async () => {
+  if (!latestSummary) {
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(latestSummary);
+    setStatus('Summary copied to clipboard.', 'info');
+    
+    // Visual feedback on button
+    if (copySummaryButton) {
+      copySummaryButton.classList.add('copied');
+      setTimeout(() => {
+        copySummaryButton.classList.remove('copied');
+      }, 600);
+    }
   } catch (error) {
     console.error(error);
     setStatus('Clipboard copy failed.', 'error');
@@ -499,6 +1071,11 @@ const displaySummary = (summary, type, length) => {
   // Update summary badge
   const wordCount = summary.trim().split(/\s+/).length;
   summaryBadge.textContent = `${wordCount} words · ${type} · ${length}`;
+  
+  // Enable copy summary button
+  if (copySummaryButton) copySummaryButton.disabled = false;
+  
+  refreshBentoControls();
 };
 
 // Determine a supported output language for the Summarizer API.
@@ -527,12 +1104,14 @@ const handleSummarize = async () => {
     return;
   }
   summarizeButton.disabled = true;
-  setStatus('Preparing to summarize...', 'notice', true);
   
   // Clear previous summary and show section
   summaryContainer.textContent = '';
   summarySection.hidden = false;
   summaryBadge.textContent = 'generating...';
+  summaryBadge.classList.add('generating'); // Start flashing animation immediately
+  clearBentoState(true);
+  refreshBentoControls();
   
   // Focus summary and minimize other sections
   focusSection(summarySection);
@@ -578,8 +1157,7 @@ const handleSummarize = async () => {
     // Create the summarizer
     const summarizer = await self.Summarizer.create(options);
 
-    // Generate streaming summary
-    setStatus('Generating summary...', 'notice', true);
+    // Generate streaming summary - status shown in badge, not in status area
     const stream = await summarizer.summarizeStreaming(latestText, {
       context: ''
     });
@@ -607,10 +1185,12 @@ const handleSummarize = async () => {
 
       const trimmed = fullSummary.trim();
       const wordCount = trimmed ? trimmed.split(/\s+/).length : 0;
-      summaryBadge.textContent = `${wordCount} words · ${currentType} · ${currentLength}`;
+      
+      // Update badge with flashing animation during generation (removed "so far")
+      summaryBadge.textContent = `generating... ${wordCount} words`;
+      summaryBadge.classList.add('generating');
 
       if (fullSummary.length - previousLength > 20) {
-        setStatus(`Generating... ${wordCount} words so far`, 'notice', true);
         previousLength = fullSummary.length;
       }
     }
@@ -618,18 +1198,46 @@ const handleSummarize = async () => {
     // Display and save the final summary
     displaySummary(fullSummary, currentType, currentLength);
     await saveSummary(fullSummary, currentType, currentLength);
+    
+    // Remove generating class after completion
+    summaryBadge.classList.remove('generating');
     setStatus('✓ Summary complete.', 'info', false);
 
     // Clean up
     summarizer.destroy();
   } catch (error) {
     console.error('Summarization error:', error);
+    summaryBadge.classList.remove('generating');
+    summaryBadge.textContent = 'error';
     setStatus(error.message || 'Failed to summarize.', 'error');
     // Keep whatever partial summary we have visible for the user.
   } finally {
     summarizeButton.disabled = !latestText;
   }
 };
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'local') {
+    return;
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, BENTO_LAST_RESULT_KEY)) {
+    applyBentoLink(changes[BENTO_LAST_RESULT_KEY].newValue);
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, BENTO_ACTIVE_JOB_KEY)) {
+    bentoJobActive = Boolean(changes[BENTO_ACTIVE_JOB_KEY].newValue);
+    updateSidePanelAccess();
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, SIDE_PANEL_STATE_KEY)) {
+    updateSidePanelAccess();
+  }
+});
+
+// Refresh side panel state when popup becomes visible
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    updateSidePanelAccess();
+  }
+});
 
 chrome.runtime.onMessage.addListener(handleMessage);
 extractButton.addEventListener('click', () => extractPageText(true));
@@ -656,6 +1264,9 @@ resetButton.addEventListener('click', async () => {
     summaryContainer.textContent = '';
     summarySection.hidden = true;
     summaryBadge.textContent = '';
+    if (copySummaryButton) copySummaryButton.disabled = true;
+    clearBentoState(true);
+    refreshBentoControls();
     
     setStatus('✓ Reset complete.', 'info', false);
   } catch (error) {
@@ -663,14 +1274,25 @@ resetButton.addEventListener('click', async () => {
     setStatus(error.message || 'Unable to reset.', 'error', false);
   }
 });
-copyButton.addEventListener('click', handleCopy);
+if (copyTextButton) copyTextButton.addEventListener('click', handleCopyText);
+if (copySummaryButton) copySummaryButton.addEventListener('click', handleCopySummary);
 downloadButton.addEventListener('click', handleDownload);
 summarizeButton.addEventListener('click', handleSummarize);
+bentoButton?.addEventListener('click', handleGenerateBentoRequest);
+bentoOpenPanelButton?.addEventListener('click', handleOpenSidePanelOnly);
 
 // Initialize: restore saved summary and auto-trigger extraction
 const initializePopup = async () => {
   // Setup collapsible sections
   setupCollapsibleSections();
+  await hydrateBentoLink();
+  await hydrateBentoJobState();
+  
+  // Update side panel state with fresh query from background
+  // This ensures the button shows the correct state on popup open
+  await updateSidePanelAccess();
+  
+  refreshBentoControls();
   
   // Try to load saved summary first
   const savedSummary = await loadSummary();

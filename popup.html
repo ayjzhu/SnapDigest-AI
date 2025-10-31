@@ -16,8 +16,13 @@
     <button id="extract-btn" type="button">Extract Text</button>
     <button id="refine-btn" type="button" disabled>Exclude Elements</button>
     <button id="reset-btn" type="button" disabled>Reset</button>
-    <button id="copy-btn" type="button" disabled>Copy All</button>
     <button id="download-btn" type="button" disabled>Download .txt</button>
+  </section>
+  <section class="side-panel-control">
+    <button id="bento-open-panel-btn" type="button" class="side-panel-toggle" title="Show the side panel">
+      <span class="indicator" aria-hidden="true"></span>
+      <span class="label">Open Side Panel</span>
+    </button>
   </section>
   <section class="summarizer-controls">
     <button id="summarize-btn" type="button" disabled>Summarize</button>
@@ -41,7 +46,15 @@
       Extracted Text
       <span class="badge" id="text-badge"></span>
     </h2>
-    <div id="text-container" class="text-container" tabindex="0" aria-label="Extracted page text"></div>
+    <div class="text-container-wrapper">
+      <div id="text-container" class="text-container" tabindex="0" aria-label="Extracted page text"></div>
+      <button id="copy-text-btn" type="button" class="copy-icon-btn" title="Copy extracted text" aria-label="Copy extracted text">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+      </button>
+    </div>
   </section>
   
   <section class="content-section" id="summary-section" hidden>
@@ -49,7 +62,19 @@
       Summary
       <span class="badge" id="summary-badge"></span>
     </h2>
-    <div id="summary-container" class="text-container" tabindex="0" aria-label="Summary"></div>
+    <div class="text-container-wrapper">
+      <div id="summary-container" class="text-container" tabindex="0" aria-label="Summary"></div>
+      <button id="copy-summary-btn" type="button" class="copy-icon-btn" title="Copy summary" aria-label="Copy summary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+      </button>
+    </div>
+    <div class="bento-actions">
+      <button id="bento-btn" type="button" disabled>Render Bento Grid</button>
+      <a id="bento-link" class="bento-link" href="#" target="_blank" rel="noopener" hidden>View Bento Page</a>
+    </div>
   </section>
   
   <section id="exclusion-section" class="exclusions" hidden>

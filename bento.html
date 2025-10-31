@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bento Digest</title>
+<style>
+  :root {
+    --page-bg: #f8fafc;
+    --text-default: #0f172a;
+    --text-muted: #475569;
+    --text-subtle: #94a3b8;
+    --card-border: #f1f5f9;
+    --grad-start: #C084FC;
+    --grad-end: #7E22CE;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--page-bg);
+    color: var(--text-default);
+    -webkit-font-smoothing: antialiased;
+  }
+  .bento-shell {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 24px 16px 48px;
+  }
+  @media (min-width: 768px) {
+    .bento-shell {
+      padding: 48px 32px 64px;
+    }
+  }
+  .bento-header {
+    text-align: center;
+    margin-bottom: 2.75rem;
+  }
+  .bento-title {
+    margin: 0;
+    font-size: clamp(2.4rem, 4vw, 3.5rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+  .bento-subtitle {
+    margin: 0.85rem auto 0;
+    max-width: 48rem;
+    font-size: clamp(1rem, 2vw, 1.25rem);
+    color: var(--text-muted);
+  }
+  .bento-cta {
+    margin-top: 1.4rem;
+    display: inline-block;
+    background: linear-gradient(90deg, var(--grad-start), var(--grad-end));
+    color: #fff;
+    font-weight: 700;
+    padding: 0.85rem 1.75rem;
+    border-radius: 1rem;
+    text-decoration: none;
+    transition: opacity 0.2s ease;
+  }
+  .bento-cta:hover { opacity: 0.9; }
+  #bento-status {
+    min-height: 1.5rem;
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--text-subtle);
+    margin-bottom: 1.5rem;
+  }
+  #bento-grid {
+    display: grid;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+    gap: 1rem;
+  }
+  @media (min-width: 768px) {
+    #bento-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1.25rem;
+    }
+  }
+  @media (min-width: 1024px) {
+    #bento-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1.5rem;
+    }
+  }
+  .card {
+    background: #fff;
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 20px -6px rgba(15, 23, 42, 0.18);
+  }
+  .card-block {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    height: 100%;
+  }
+  @media (min-width: 1024px) {
+    .card-block { padding: 30px; gap: 18px; }
+  }
+  .card-span-s,
+  .card-span-m,
+  .card-span-l {
+    grid-column: span 1;
+  }
+  @media (min-width: 768px) {
+    .card-span-m { grid-column: span 2; }
+    .card-span-l { grid-column: span 2; }
+  }
+  @media (min-width: 1024px) {
+    .card-span-l { grid-column: span 4; }
+  }
+  .grad-text {
+    background: linear-gradient(90deg, var(--grad-start), var(--grad-end));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .grad-bg {
+    background: linear-gradient(90deg, var(--grad-start), var(--grad-end));
+  }
+  .tag {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: #f1f5f9;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .card-title {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+  }
+  @media (min-width: 768px) {
+    .card-title { font-size: 1.3rem; }
+  }
+  .card-body {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+  }
+  .card-list {
+    margin: 0;
+    padding-left: 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    font-size: 0.92rem;
+    color: var(--text-default);
+  }
+  .card-list--dark,
+  .darkcard .card-body,
+  .darkcard .card-list {
+    color: #e2e8f0;
+  }
+  .progress-pair {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .progress-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+  .progress-labels--muted {
+    color: var(--text-subtle);
+  }
+  .progress-track {
+    width: 100%;
+    height: 10px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 999px;
+  }
+  .progress-fill--muted {
+    background: #94a3b8;
+  }
+  .card-sources {
+    font-size: 0.8rem;
+    color: var(--text-subtle);
+  }
+  .card-sources a {
+    color: inherit;
+    text-decoration: underline;
+  }
+  .card-sources a:hover {
+    text-decoration: none;
+  }
+  .darkcard {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    color: #f8fafc;
+    box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.12), 0 2px 4px -2px rgba(15, 23, 42, 0.08);
+  }
+  .darkcard:hover {
+    box-shadow: 0 12px 20px -6px rgba(15, 23, 42, 0.25);
+  }
+  .darkcard .tag {
+    background: rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+  }
+</style>
+</head>
+<body>
+<div class="bento-shell">
+  <header id="bento-header" class="bento-header">
+    <h1 class="bento-title"><span id="hdr-title">Bento Title</span></h1>
+    <p id="hdr-subtitle" class="bento-subtitle">Subtitle</p>
+    <a id="hdr-cta" href="#" target="_blank" rel="noopener" class="bento-cta">Read original</a>
+  </header>
+  <div id="bento-status"></div>
+  <section id="bento-grid">
+    <!-- cards injected here -->
+  </section>
+</div>
+<script src="bento.js" defer></script>
+</body>
+</html>

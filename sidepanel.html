@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bento Builder</title>
+<style>
+  :root {
+    --bg: #1a1a1a;
+    --panel-bg: #ffffff;
+    --canvas-bg: #f5f5f5;
+    --text-primary: #0f172a;
+    --text-muted: #64748b;
+    --text-subtle: #94a3b8;
+    --accent: #7e22ce;
+    --accent-blue: #2563eb;
+    --accent-soft: rgba(126, 34, 206, 0.15);
+    --border: #e5e7eb;
+    --card-bg: #fafafa;
+    --code-bg: #1e1e1e;
+    --code-text: #d4d4d4;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* Header Bar */
+  .header-bar {
+    background: var(--panel-bg);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+  }
+  .header-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  
+  /* Toggle Switch */
+  .view-toggle {
+    display: flex;
+    background: var(--canvas-bg);
+    border-radius: 8px;
+    padding: 3px;
+    border: 1px solid var(--border);
+  }
+  .view-toggle button {
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .view-toggle button.active {
+    background: white;
+    color: var(--text-primary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+  .view-toggle button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  /* Action Buttons */
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+  }
+  .icon-btn:hover:not(:disabled) {
+    background: var(--canvas-bg);
+    border-color: var(--text-muted);
+  }
+  .icon-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .icon-btn svg {
+    width: 16px;
+    height: 16px;
+    stroke: var(--text-primary);
+    fill: none;
+    stroke-width: 2;
+  }
+  
+  /* Main Content Area */
+  .main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--panel-bg);
+  }
+  
+  /* Canvas Container */
+  .canvas-container {
+    flex: 1;
+    margin: 12px;
+    background: var(--canvas-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  }
+  
+  /* Status Bar (inside canvas) */
+  .status-bar {
+    padding: 10px 12px;
+    background: white;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-subtle);
+    flex-shrink: 0;
+  }
+  .status-indicator.active {
+    background: var(--accent-blue);
+    animation: pulse-dot 1.5s ease-in-out infinite;
+  }
+  .status-indicator.success {
+    background: #10b981;
+  }
+  .status-indicator.error {
+    background: #ef4444;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.1); }
+  }
+  
+  /* Article Info Card */
+  .article-card {
+    margin: 12px 12px 8px 12px;
+    padding: 10px 12px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: none;
+  }
+  .article-card.visible {
+    display: block;
+  }
+  .article-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-subtle);
+    margin: 0 0 4px;
+  }
+  .article-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--text-primary);
+  }
+  
+  /* Code View */
+  .code-view {
+    flex: 1;
+    overflow: hidden;
+    display: none;
+    flex-direction: column;
+    margin: 8px 12px 12px 12px;
+    background: var(--code-bg);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    position: relative;
+  }
+  .code-view.active {
+    display: flex;
+  }
+  .code-editor {
+    flex: 1;
+    background: var(--code-bg);
+    overflow: auto;
+    padding: 12px;
+    padding-right: 48px; /* Space for copy button (28px) + safe margin (12px) + scrollbar clearance (8px) */
+    font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--code-text);
+    scroll-behavior: smooth;
+  }
+  .code-editor::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  .code-editor::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    margin: 4px 2px;
+  }
+  .code-editor::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  .code-editor::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  
+  /* Copy button for code view */
+  .copy-code-btn {
+    position: absolute;
+    top: 12px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(30, 30, 30, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(4px);
+    z-index: 10;
+    opacity: 0.5;
+  }
+  
+  .code-view:hover .copy-code-btn {
+    opacity: 0.85;
+  }
+  
+  .copy-code-btn:hover {
+    opacity: 1;
+    background: rgba(40, 40, 40, 0.95);
+    border-color: rgba(99, 102, 241, 0.4);
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15), 0 1px 3px rgba(0, 0, 0, 0.3);
+    transform: scale(1.05);
+  }
+  
+  .copy-code-btn:active {
+    transform: scale(0.98);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+  
+  .copy-code-btn svg {
+    color: #9ca3af;
+    transition: color 0.2s ease-in-out;
+    width: 14px;
+    height: 14px;
+  }
+  
+  .copy-code-btn:hover svg {
+    color: #c7d2fe;
+  }
+  
+  /* Animation for successful copy */
+  @keyframes copySuccessCode {
+    0% {
+      background: rgba(16, 185, 129, 0.3);
+      border-color: #10b981;
+      transform: scale(1.1);
+    }
+    50% {
+      transform: scale(1.05);
+    }
+    100% {
+      background: rgba(30, 30, 30, 0.9);
+      border-color: rgba(255, 255, 255, 0.1);
+      transform: scale(1);
+    }
+  }
+  
+  .copy-code-btn.copied {
+    animation: copySuccessCode 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .copy-code-btn.copied svg {
+    color: #10b981;
+  }
+  
+  .code-line {
+    display: flex;
+    gap: 16px;
+    transition: background 0.15s ease;
+  }
+  .code-line:hover {
+    background: rgba(255, 255, 255, 0.03);
+  }
+  .code-line.status .line-content {
+    color: #94a3b8;
+    font-weight: 500;
+  }
+  .code-line.status .line-number {
+    color: #64748b;
+  }
+  .line-number {
+    color: #858585;
+    text-align: right;
+    min-width: 30px;
+    user-select: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .line-content {
+    flex: 1;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .code-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 14px;
+    background: var(--accent-blue);
+    animation: blink 1s step-end infinite;
+    vertical-align: text-bottom;
+    margin-left: 1px;
+  }
+  @keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+  }
+  
+  /* Preview View */
+  .preview-view {
+    flex: 1;
+    overflow: auto;
+    display: none;
+    padding: 0;
+  }
+  .preview-view.active {
+    display: flex;
+    flex-direction: column;
+  }
+  .preview-placeholder {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    padding: 32px 16px;
+    min-height: 200px;
+  }
+  .preview-placeholder.hidden {
+    display: none;
+  }
+  .preview-content {
+    flex: 0 1 auto;
+    overflow: visible;
+    padding: 12px;
+    display: none;
+  }
+  .preview-content:empty {
+    display: none;
+  }
+  
+  /* Progress Stages */
+  .progress-section {
+    padding: 12px;
+    display: none;
+  }
+  .progress-section.visible {
+    display: block;
+  }
+  .stage-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .stage {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 8px 12px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    transition: all 0.2s ease;
+  }
+  .stage.active {
+    border-color: var(--accent-blue);
+    background: rgba(37, 99, 235, 0.05);
+  }
+  .stage.complete {
+    opacity: 0.6;
+  }
+  .stage-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--text-subtle);
+    margin-top: 4px;
+    flex-shrink: 0;
+  }
+  .stage.active .stage-dot {
+    border-color: var(--accent-blue);
+    background: var(--accent-blue);
+    animation: pulse-dot 1.5s ease-in-out infinite;
+  }
+  .stage.complete .stage-dot {
+    border-color: #10b981;
+    background: #10b981;
+  }
+  .stage h3 {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .stage small {
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+  .stage small {
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+  
+  /* Preview Grid */
+  .preview-root {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+  }
+  @media (max-width: 300px) {
+    .preview-root {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (min-width: 301px) and (max-width: 500px) {
+    .preview-root {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  .card-span-s,
+  .card-span-m,
+  .card-span-l {
+    grid-column: span 1;
+  }
+  @media (min-width: 400px) {
+    .card-span-m {
+      grid-column: span 2;
+    }
+  }
+  @media (min-width: 520px) {
+    .card-span-l {
+      grid-column: span 2;
+    }
+  }
+  .preview-root .card {
+    border-radius: 12px;
+    background: #fff;
+    border: 1px solid var(--border);
+    padding: clamp(12px, 3vw, 16px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    min-height: 100px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .preview-root .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  }
+  .preview-root .darkcard {
+    background: #0f172a;
+    color: #e2e8f0;
+    border: 1px solid #1e293b;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+  .preview-root .darkcard:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  }
+  .preview-root .darkcard .tag {
+    background: rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+  }
+  .preview-root .tag {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    background: var(--canvas-bg);
+    color: var(--text-muted);
+    padding: 3px 8px;
+    border-radius: 6px;
+    display: inline-block;
+  }
+  .preview-root .card-title {
+    margin: 8px 0 4px;
+    font-size: clamp(0.9rem, 2.5vw, 1rem);
+    font-weight: 600;
+    word-wrap: break-word;
+  }
+  .preview-root .card-body {
+    margin: 4px 0 0;
+    font-size: clamp(0.75rem, 2vw, 0.85rem);
+    color: var(--text-muted);
+    word-wrap: break-word;
+    line-height: 1.5;
+  }
+  .preview-root .darkcard .card-body,
+  .preview-root .darkcard .card-list li {
+    color: #cbd5e1;
+  }
+  .preview-root .card-list {
+    margin: 8px 0 0;
+    padding-left: 1.2rem;
+    font-size: 0.8rem;
+  }
+  .progress-pair {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .progress-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+  .progress-pair .progress-track {
+    width: 100%;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--canvas-bg);
+    overflow: hidden;
+  }
+  .progress-pair .progress-fill {
+    height: 100%;
+    border-radius: inherit;
+  }
+  .card-sources {
+    font-size: 0.75rem;
+    color: var(--text-subtle);
+    margin-top: 8px;
+  }
+  .card-sources a {
+    color: inherit;
+  }
+  
+  /* Gradient text */
+  .grad-text {
+    background: linear-gradient(90deg,#C084FC,#7E22CE);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  /* Narrow panel adjustments */
+  @media (max-width: 300px) {
+    .header-title {
+      font-size: 12px;
+    }
+    .view-toggle {
+      display: none;
+    }
+  }
+</style>
+</head>
+<body>
+  <!-- Header Bar -->
+  <div class="header-bar">
+    <div class="header-left">
+      <h1 class="header-title">Bento Builder</h1>
+    </div>
+    <div class="header-actions">
+      <div class="view-toggle" id="view-toggle">
+        <button id="code-tab" class="active">Code</button>
+        <button id="preview-tab" disabled>Preview</button>
+      </div>
+      <button class="icon-btn" id="open-full" disabled title="Open in new tab">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <line x1="10" y1="14" x2="21" y2="3"></line>
+        </svg>
+      </button>
+      <button class="icon-btn" id="download-html" disabled title="Download HTML">
+        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <!-- Canvas Container -->
+    <div class="canvas-container">
+      <!-- Status Bar -->
+      <div class="status-bar">
+        <span class="status-indicator" id="status-indicator"></span>
+        <span id="status-text">Waiting for a Bento request…</span>
+      </div>
+      
+      <!-- Article Card -->
+      <div class="article-card" id="article-card">
+        <p class="article-label">Current Article</p>
+        <h2 class="article-title" id="article-title">No article selected</h2>
+      </div>
+      
+      <!-- Progress Section - Hidden, status shown in code canvas -->
+      <div class="progress-section" id="progress-section" style="display: none;">
+        <ul class="stage-list">
+          <li class="stage active" data-stage="waiting">
+            <span class="stage-dot"></span>
+            <div>
+              <h3>Waiting</h3>
+              <small class="stage-detail">Launch Bento render from the popup.</small>
+            </div>
+          </li>
+          <li class="stage" data-stage="preparing">
+            <span class="stage-dot"></span>
+            <div>
+              <h3>Preparing summary</h3>
+              <small class="stage-detail">Packaging article summary.</small>
+            </div>
+          </li>
+          <li class="stage" data-stage="checking">
+            <span class="stage-dot"></span>
+            <div>
+              <h3>Checking model</h3>
+              <small class="stage-detail">Verifying Prompt API availability.</small>
+            </div>
+          </li>
+          <li class="stage" data-stage="downloading">
+            <span class="stage-dot"></span>
+            <div>
+              <h3>Downloading</h3>
+              <small class="stage-detail">Caching on-device model.</small>
+            </div>
+          </li>
+          <li class="stage" data-stage="prompting">
+            <span class="stage-dot"></span>
+            <div>
+              <h3>Generating cards</h3>
+              <small class="stage-detail">Prompting Gemini Nano.</small>
+            </div>
+          </li>
+          <li class="stage" data-stage="rendering">
+            <span class="stage-dot"></span>
+            <div>
+              <h3>Rendering preview</h3>
+              <small class="stage-detail">Building Bento grid.</small>
+            </div>
+          </li>
+          <li class="stage" data-stage="complete">
+            <span class="stage-dot"></span>
+            <div>
+              <h3>Complete</h3>
+              <small class="stage-detail">Ready to view or save.</small>
+            </div>
+          </li>
+        </ul>
+      </div>
+      
+      <!-- Code View -->
+      <div class="code-view active" id="code-view">
+        <button id="copy-code-btn" type="button" class="copy-code-btn" title="Copy code" aria-label="Copy generated code">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        </button>
+        <div class="code-editor" id="code-editor">
+          <div class="code-line">
+            <span class="line-number">1</span>
+            <span class="line-content">// Waiting for generation...</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Preview View -->
+      <div class="preview-view" id="preview-view">
+        <div class="preview-placeholder" id="preview-placeholder">
+          Start a Bento render to see the live grid preview here.
+        </div>
+        <div class="preview-content" id="preview-content">
+          <div id="preview-root" class="preview-root"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script src="sidepanel.js" defer></script>
+</body>
+</html>
