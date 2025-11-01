@@ -4,6 +4,11 @@ const resetButton = document.getElementById('reset-btn');
 const copyTextButton = document.getElementById('copy-text-btn');
 const copySummaryButton = document.getElementById('copy-summary-btn');
 const downloadButton = document.getElementById('download-btn');
+
+// Debug: Check if buttons exist
+if (!extractButton) console.error('Extract button not found!');
+if (!refineButton) console.error('Refine button not found!');
+if (!resetButton) console.error('Reset button not found!');
 const summarizeButton = document.getElementById('summarize-btn');
 const summaryType = document.getElementById('summary-type');
 const summaryLength = document.getElementById('summary-length');
@@ -785,6 +790,7 @@ const setupCollapsibleSections = () => {
 };
 
 const extractPageText = async (clearSummary = true) => {
+  console.log('extractPageText called, clearSummary:', clearSummary);
   if (copyTextButton) copyTextButton.disabled = true;
   downloadButton.disabled = true;
   summarizeButton.disabled = true;
@@ -794,6 +800,7 @@ const extractPageText = async (clearSummary = true) => {
   setStatus('Extracting…', 'notice');
   try {
     const tab = await getActiveTab();
+    console.log('Active tab:', tab);
     currentTabId = tab.id;
     currentTabUrl = tab.url || currentTabUrl;
 
@@ -822,7 +829,16 @@ const extractPageText = async (clearSummary = true) => {
     }
 
     await ensureContentScript(tab.id);
-    await sendMessageToTab(tab.id, { type: COMMAND_TYPES.EXTRACT });
+    const response = await sendMessageToTab(tab.id, { type: COMMAND_TYPES.EXTRACT });
+    console.log('Received response from content script:', response);
+    
+    // Handle the response directly if it contains extraction data
+    if (response && typeof response.text !== 'undefined') {
+      populateText(response);
+    } else {
+      console.warn('No data in sendMessageToTab response, waiting for runtime message...');
+      // The old flow via handleMessage will still work as fallback
+    }
   } catch (error) {
     console.error(error);
     setStatus(error.message || 'Unable to extract text.', 'error');
@@ -1240,10 +1256,24 @@ document.addEventListener('visibilitychange', () => {
 });
 
 chrome.runtime.onMessage.addListener(handleMessage);
-extractButton.addEventListener('click', () => extractPageText(true));
-refineButton.addEventListener('click', toggleSelectionMode);
-resetButton.addEventListener('click', async () => {
-  if (!currentTabId) {
+
+// Event listeners with null checks
+if (extractButton) {
+  extractButton.addEventListener('click', () => {
+    console.log('Extract button clicked!');
+    extractPageText(true);
+  });
+} else {
+  console.error('extractButton is null - cannot attach event listener');
+}
+
+if (refineButton) {
+  refineButton.addEventListener('click', toggleSelectionMode);
+}
+
+if (resetButton) {
+  resetButton.addEventListener('click', async () => {
+    if (!currentTabId) {
     const tab = await getActiveTab();
     currentTabId = tab.id;
   }
@@ -1273,18 +1303,29 @@ resetButton.addEventListener('click', async () => {
     console.error(error);
     setStatus(error.message || 'Unable to reset.', 'error', false);
   }
-});
+  });
+}
+
 if (copyTextButton) copyTextButton.addEventListener('click', handleCopyText);
 if (copySummaryButton) copySummaryButton.addEventListener('click', handleCopySummary);
-downloadButton.addEventListener('click', handleDownload);
-summarizeButton.addEventListener('click', handleSummarize);
-bentoButton?.addEventListener('click', handleGenerateBentoRequest);
-bentoOpenPanelButton?.addEventListener('click', handleOpenSidePanelOnly);
+if (downloadButton) downloadButton.addEventListener('click', handleDownload);
+if (summarizeButton) summarizeButton.addEventListener('click', handleSummarize);
+if (bentoButton) bentoButton.addEventListener('click', handleGenerateBentoRequest);
+if (bentoOpenPanelButton) bentoOpenPanelButton.addEventListener('click', handleOpenSidePanelOnly);
 
 // Initialize: restore saved summary and auto-trigger extraction
 const initializePopup = async () => {
   // Setup collapsible sections
   setupCollapsibleSections();
+  
+  // Reset selection state UI on popup open (popup should always start fresh)
+  selectionActive = false;
+  document.body.classList.remove('selection-active', 'selection-minimized', 'selection-preview');
+  if (selectionBadge) {
+    selectionBadge.hidden = true;
+  }
+  refineButton.textContent = 'Exclude Elements';
+  
   await hydrateBentoLink();
   await hydrateBentoJobState();
   

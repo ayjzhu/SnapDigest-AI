@@ -135,16 +135,19 @@
         excludedCount: excludedElements.size,
         excluded: getExcludedDescriptors()
       };
-      sendMessage(MESSAGE_TYPES.TEXT, result);
+      sendMessage(MESSAGE_TYPES.TEXT, payload);
+      return payload;
     } catch (error) {
       console.error('SnapDigest AI: extraction failed', error);
-      sendMessage(MESSAGE_TYPES.TEXT, {
+      const errorPayload = {
         text: '',
         title: document.title || '',
         url: window.location.href,
         excludedCount: excludedElements.size,
         excluded: getExcludedDescriptors()
-      });
+      };
+      sendMessage(MESSAGE_TYPES.TEXT, errorPayload);
+      return errorPayload;
     }
   };
 
@@ -382,11 +385,32 @@
     }
   };
 
-  chrome.runtime.onMessage.addListener((message) => {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message || !message.type) {
-      return;
+      return false;
     }
+    
+    // Handle extract command synchronously with response
+    if (message.type === COMMAND_TYPES.EXTRACT) {
+      try {
+        const result = dispatchText();
+        sendResponse(result);
+      } catch (error) {
+        console.error('SnapDigest AI: extraction failed', error);
+        sendResponse({
+          text: '',
+          title: document.title || '',
+          url: window.location.href,
+          excludedCount: 0,
+          excluded: []
+        });
+      }
+      return true; // Keep channel open for async response
+    }
+    
+    // Handle other commands
     handleCommand(message);
+    return false;
   });
 
   const globalRestoreHandler = (event) => {

@@ -8,41 +8,100 @@
 </head>
 <body>
   <header>
-    <h1>SnapDigest AI</h1>
-    <span id="selection-badge" class="selection-badge" hidden>Selection mode active</span>
-    <p id="metadata" class="metadata">Activate the extractor to load page text.</p>
+    <div class="header-title">
+      <svg class="logo-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+        <path d="M2 17l10 5 10-5"/>
+        <path d="M2 12l10 5 10-5"/>
+      </svg>
+      <h1>SnapDigest AI</h1>
+      <button id="bento-open-panel-btn" type="button" class="side-panel-icon-btn" title="Toggle side panel" aria-label="Toggle side panel">
+        <span class="indicator" aria-hidden="true"></span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7"/>
+          <rect x="14" y="3" width="7" height="7"/>
+          <rect x="14" y="14" width="7" height="7"/>
+          <rect x="3" y="14" width="7" height="7"/>
+        </svg>
+      </button>
+    </div>
+    <span id="selection-badge" class="selection-badge" hidden>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M9 11l3 3L22 4"/>
+      </svg>
+      Selection mode
+    </span>
+    <p id="metadata" class="metadata">Ready to extract content</p>
   </header>
-  <section class="controls">
-    <button id="extract-btn" type="button">Extract Text</button>
-    <button id="refine-btn" type="button" disabled>Exclude Elements</button>
-    <button id="reset-btn" type="button" disabled>Reset</button>
-    <button id="download-btn" type="button" disabled>Download .txt</button>
-  </section>
-  <section class="side-panel-control">
-    <button id="bento-open-panel-btn" type="button" class="side-panel-toggle" title="Show the side panel">
-      <span class="indicator" aria-hidden="true"></span>
-      <span class="label">Open Side Panel</span>
+  
+  <section class="action-bar">
+    <button id="extract-btn" type="button" class="btn btn-primary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="16 18 22 12 16 6"/>
+        <polyline points="8 6 2 12 8 18"/>
+      </svg>
+      Extract
+    </button>
+    <button id="refine-btn" type="button" class="btn btn-secondary" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15V6M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM3 15V6M5.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM12 3v18"/>
+      </svg>
+      Exclude
+    </button>
+    <button id="reset-btn" type="button" class="btn btn-ghost" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+        <path d="M21 3v5h-5"/>
+      </svg>
+      Reset
+    </button>
+    <button id="download-btn" type="button" class="btn btn-ghost" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      Save
     </button>
   </section>
+  
   <section class="summarizer-controls">
-    <button id="summarize-btn" type="button" disabled>Summarize</button>
-    <select id="summary-type">
-      <option value="tldr">TL;DR</option>
-      <option value="teaser">Teaser</option>
-      <option value="key-points" selected>Key Points</option>
-      <option value="headline">Headline</option>
-    </select>
-    <select id="summary-length">
-      <option value="short">Short</option>
-      <option value="medium">Medium</option>
-      <option value="long" selected>Long</option>
-    </select>
+    <button id="summarize-btn" type="button" class="btn btn-accent" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+        <line x1="10" y1="9" x2="8" y2="9"/>
+      </svg>
+      Summarize
+    </button>
+    <div class="select-group">
+      <select id="summary-type">
+        <option value="tldr">TL;DR</option>
+        <option value="teaser">Teaser</option>
+        <option value="key-points" selected>Key Points</option>
+        <option value="headline">Headline</option>
+      </select>
+      <select id="summary-length">
+        <option value="short">Short</option>
+        <option value="medium">Medium</option>
+        <option value="long" selected>Long</option>
+      </select>
+    </div>
   </section>
-  <p id="status" class="status" role="status" aria-live="polite"></p>
-  <p id="count" class="count"></p>
+  
+  <div class="status-bar">
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <p id="count" class="count"></p>
+  </div>
   
   <section class="content-section text-section empty" id="text-section">
     <h2>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+      </svg>
       Extracted Text
       <span class="badge" id="text-badge"></span>
     </h2>
@@ -59,7 +118,11 @@
   
   <section class="content-section" id="summary-section" hidden>
     <h2>
-      Summary
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M12 6v6l4 2"/>
+      </svg>
+      AI Summary
       <span class="badge" id="summary-badge"></span>
     </h2>
     <div class="text-container-wrapper">
@@ -72,15 +135,44 @@
       </button>
     </div>
     <div class="bento-actions">
-      <button id="bento-btn" type="button" disabled>Render Bento Grid</button>
-      <a id="bento-link" class="bento-link" href="#" target="_blank" rel="noopener" hidden>View Bento Page</a>
+      <button id="bento-btn" type="button" class="btn btn-bento" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7"/>
+          <rect x="14" y="3" width="7" height="7"/>
+          <rect x="14" y="14" width="7" height="7"/>
+          <rect x="3" y="14" width="7" height="7"/>
+        </svg>
+        Render Bento Grid
+      </button>
+      <a id="bento-link" class="bento-link" href="#" target="_blank" rel="noopener" hidden>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+          <polyline points="15 3 21 3 21 9"/>
+          <line x1="10" y1="14" x2="21" y2="3"/>
+        </svg>
+        View Bento
+      </a>
     </div>
   </section>
   
   <section id="exclusion-section" class="exclusions" hidden>
-    <h2>Excluded Elements</h2>
+    <h2>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="15" y1="9" x2="9" y2="15"/>
+        <line x1="9" y1="9" x2="15" y2="15"/>
+      </svg>
+      Excluded Elements
+    </h2>
     <ul id="exclusion-list"></ul>
-    <p class="hint">Right-click a dashed element on the page to restore it.</p>
+    <p class="hint">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="16" x2="12" y2="12"/>
+        <line x1="12" y1="8" x2="12.01" y2="8"/>
+      </svg>
+      Right-click a dashed element on the page to restore it.
+    </p>
   </section>
   <script src="popup.js"></script>
 </body>
