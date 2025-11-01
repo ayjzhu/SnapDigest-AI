@@ -15,7 +15,7 @@
         <path d="M2 12l10 5 10-5"/>
       </svg>
       <h1>SnapDigest AI</h1>
-      <button id="bento-open-panel-btn" type="button" class="side-panel-icon-btn" title="Toggle side panel" aria-label="Toggle side panel">
+      <button id="bento-open-panel-btn" type="button" class="side-panel-icon-btn" title="View Bento Grid in Side Panel" aria-label="View Bento Grid in Side Panel">
         <span class="indicator" aria-hidden="true"></span>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="3" width="7" height="7"/>
@@ -25,37 +25,49 @@
         </svg>
       </button>
     </div>
-    <span id="selection-badge" class="selection-badge" hidden>
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-        <path d="M9 11l3 3L22 4"/>
-      </svg>
-      Selection mode
-    </span>
-    <p id="metadata" class="metadata">Ready to extract content</p>
   </header>
   
+  <div class="section-divider" id="divider-header"></div>
+  
+  <!-- Page Title Section (Article Title at the Top) -->
+  <section class="page-title-section" id="page-title-section" hidden>
+    <div class="page-title-wrapper">
+      <span id="page-title" class="page-title">Page Title</span>
+      <a id="page-link" class="page-link-inline" href="#" target="_blank" rel="noopener" title="Open original article">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+        </svg>
+      </a>
+    </div>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+  </section>
+  
+  <div class="section-divider" id="divider-1" hidden></div>
+  
+  <!-- Action Buttons (Above Text Section) -->
   <section class="action-bar">
-    <button id="extract-btn" type="button" class="btn btn-primary">
+    <button id="extract-btn" type="button" class="btn btn-primary" title="Extract visible text from the current page">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="16 18 22 12 16 6"/>
         <polyline points="8 6 2 12 8 18"/>
       </svg>
       Extract
     </button>
-    <button id="refine-btn" type="button" class="btn btn-secondary" disabled>
+    <button id="refine-btn" type="button" class="btn btn-secondary" disabled title="Select elements to exclude from extraction">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M21 15V6M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM3 15V6M5.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM12 3v18"/>
       </svg>
       Exclude
     </button>
-    <button id="reset-btn" type="button" class="btn btn-ghost" disabled>
+    <button id="reset-btn" type="button" class="btn btn-ghost" disabled title="Clear all exclusions and reset to original page text">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
         <path d="M21 3v5h-5"/>
       </svg>
       Reset
     </button>
-    <button id="download-btn" type="button" class="btn btn-ghost" disabled>
+    <button id="download-btn" type="button" class="btn btn-ghost" disabled title="Save extracted text as a text file">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
         <polyline points="7 10 12 15 17 10"/>
@@ -65,37 +77,9 @@
     </button>
   </section>
   
-  <section class="summarizer-controls">
-    <button id="summarize-btn" type="button" class="btn btn-accent" disabled>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
-        <polyline points="14 2 14 8 20 8"/>
-        <line x1="16" y1="13" x2="8" y2="13"/>
-        <line x1="16" y1="17" x2="8" y2="17"/>
-        <line x1="10" y1="9" x2="8" y2="9"/>
-      </svg>
-      Summarize
-    </button>
-    <div class="select-group">
-      <select id="summary-type">
-        <option value="tldr">TL;DR</option>
-        <option value="teaser">Teaser</option>
-        <option value="key-points" selected>Key Points</option>
-        <option value="headline">Headline</option>
-      </select>
-      <select id="summary-length">
-        <option value="short">Short</option>
-        <option value="medium">Medium</option>
-        <option value="long" selected>Long</option>
-      </select>
-    </div>
-  </section>
+  <div class="section-divider" id="divider-2"></div>
   
-  <div class="status-bar">
-    <p id="status" class="status" role="status" aria-live="polite"></p>
-    <p id="count" class="count"></p>
-  </div>
-  
+  <!-- Extracted Text Section (Below Action Buttons) -->
   <section class="content-section text-section empty" id="text-section">
     <h2>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -103,7 +87,7 @@
         <polyline points="14 2 14 8 20 8"/>
       </svg>
       Extracted Text
-      <span class="badge" id="text-badge"></span>
+      <span class="badge" id="count"></span>
     </h2>
     <div class="text-container-wrapper">
       <div id="text-container" class="text-container" tabindex="0" aria-label="Extracted page text"></div>
@@ -116,6 +100,8 @@
     </div>
   </section>
   
+  <div class="section-divider" id="divider-3"></div>
+  
   <section class="content-section" id="summary-section" hidden>
     <h2>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -125,6 +111,34 @@
       AI Summary
       <span class="badge" id="summary-badge"></span>
     </h2>
+    
+    <!-- Summarizer Controls inside Summary Section -->
+    <div class="summarizer-controls-inline">
+      <button id="summarize-btn" type="button" class="btn btn-accent" disabled title="Generate AI summary of extracted text using Chrome's built-in AI">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+          <line x1="10" y1="9" x2="8" y2="9"/>
+        </svg>
+        Summarize
+      </button>
+      <div class="select-group">
+        <select id="summary-type" title="Choose summary format">
+          <option value="tldr">TL;DR</option>
+          <option value="teaser">Teaser</option>
+          <option value="key-points" selected>Key Points</option>
+          <option value="headline">Headline</option>
+        </select>
+        <select id="summary-length" title="Choose summary length">
+          <option value="short">Short</option>
+          <option value="medium">Medium</option>
+          <option value="long" selected>Long</option>
+        </select>
+      </div>
+    </div>
+    
     <div class="text-container-wrapper">
       <div id="summary-container" class="text-container" tabindex="0" aria-label="Summary"></div>
       <button id="copy-summary-btn" type="button" class="copy-icon-btn" title="Copy summary" aria-label="Copy summary">
@@ -134,26 +148,20 @@
         </svg>
       </button>
     </div>
-    <div class="bento-actions">
-      <button id="bento-btn" type="button" class="btn btn-bento" disabled>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="7" height="7"/>
-          <rect x="14" y="3" width="7" height="7"/>
-          <rect x="14" y="14" width="7" height="7"/>
-          <rect x="3" y="14" width="7" height="7"/>
-        </svg>
-        Render Bento Grid
-      </button>
-      <a id="bento-link" class="bento-link" href="#" target="_blank" rel="noopener" hidden>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-          <polyline points="15 3 21 3 21 9"/>
-          <line x1="10" y1="14" x2="21" y2="3"/>
-        </svg>
-        View Bento
-      </a>
-    </div>
+    
+    <!-- Bento Button at Bottom of Summary -->
+    <button id="bento-btn" type="button" class="btn btn-bento-bottom" disabled title="Generate a summary first to create a Bento Grid">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="7" height="7"/>
+        <rect x="14" y="3" width="7" height="7"/>
+        <rect x="14" y="14" width="7" height="7"/>
+        <rect x="3" y="14" width="7" height="7"/>
+      </svg>
+      Create Bento Grid
+    </button>
   </section>
+  
+  <div class="section-divider" id="divider-4"></div>
   
   <section id="exclusion-section" class="exclusions" hidden>
     <h2>
@@ -163,6 +171,7 @@
         <line x1="9" y1="9" x2="15" y2="15"/>
       </svg>
       Excluded Elements
+      <span class="badge" id="exclusion-badge"></span>
     </h2>
     <ul id="exclusion-list"></ul>
     <p class="hint">

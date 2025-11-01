@@ -19,13 +19,17 @@ const textContainer = document.getElementById('text-container');
 const textSection = document.getElementById('text-section');
 const textBadge = document.getElementById('text-badge');
 const metadataElement = document.getElementById('metadata');
+const pageTitleSection = document.getElementById('page-title-section');
+const pageLink = document.getElementById('page-link');
+const pageTitle = document.getElementById('page-title');
 const bentoButton = document.getElementById('bento-btn');
 const bentoOpenPanelButton = document.getElementById('bento-open-panel-btn');
-const bentoLink = document.getElementById('bento-link');
+// bentoLink removed - using side panel for viewing instead
 const statusElement = document.getElementById('status');
 const countElement = document.getElementById('count');
 const exclusionSection = document.getElementById('exclusion-section');
 const exclusionList = document.getElementById('exclusion-list');
+const exclusionBadge = document.getElementById('exclusion-badge');
 const selectionBadge = document.getElementById('selection-badge');
 
 // Collapsible controls
@@ -336,17 +340,10 @@ const updateSidePanelAccess = async () => {
 };
 
 const applyBentoLink = (descriptor) => {
-  if (!bentoLink) {
-    return;
-  }
+  // bentoLink UI element removed - just track state for side panel
   if (descriptor && descriptor.resultKey) {
-    const viewerUrl = chrome.runtime.getURL(`bento.html#${encodeURIComponent(descriptor.resultKey)}`);
-    bentoLink.href = viewerUrl;
-    bentoLink.hidden = false;
     bentoResultAvailable = true;
   } else {
-    bentoLink.hidden = true;
-    bentoLink.removeAttribute('href');
     bentoResultAvailable = false;
   }
   updateSidePanelAccess();
@@ -463,11 +460,13 @@ const refreshBentoControls = () => {
   }
   if (bentoInProgress) {
     bentoButton.disabled = true;
+    bentoButton.title = 'Generating Bento Grid...';
     updateSidePanelAccess();
     return;
   }
   const hasSummary = Boolean(latestSummary && latestSummary.trim().length);
   bentoButton.disabled = !hasSummary;
+  bentoButton.title = hasSummary ? 'Generate Bento Grid visualization' : 'Generate a summary first to create a Bento Grid';
   if (!hasSummary) {
     clearBentoState(true);
   }
@@ -720,22 +719,61 @@ const updateCounts = (text, excludedCount = 0) => {
   const trimmed = text.trim();
   const charCount = trimmed.length;
   const wordCount = trimmed ? trimmed.split(/\s+/).length : 0;
-  const exclusionSuffix = excludedCount ? ` · ${excludedCount} exclusion${excludedCount === 1 ? '' : 's'}` : '';
-  countElement.textContent = `${wordCount.toLocaleString()} words · ${charCount.toLocaleString()} characters${exclusionSuffix}`;
+  countElement.textContent = `${wordCount.toLocaleString()} words · ${charCount.toLocaleString()} characters`;
+};
+
+const updateDividers = () => {
+  // Manage divider visibility based on adjacent sections
+  const divider1 = document.getElementById('divider-1');
+  const divider2 = document.getElementById('divider-2');
+  const divider3 = document.getElementById('divider-3');
+  const divider4 = document.getElementById('divider-4');
+  
+  // Divider 1: between page title and action bar
+  if (divider1) {
+    divider1.hidden = pageTitleSection?.hidden !== false;
+  }
+  
+  // Divider 2: between action bar and text section
+  if (divider2) {
+    divider2.hidden = false; // Always show if we have actions
+  }
+  
+  // Divider 3: between text section and summary section
+  if (divider3) {
+    divider3.hidden = textSection?.classList.contains('empty') || summarySection?.hidden !== false;
+  }
+  
+  // Divider 4: between summary section and exclusion section
+  if (divider4) {
+    divider4.hidden = summarySection?.hidden !== false || exclusionSection?.hidden !== false;
+  }
 };
 
 const renderExclusions = (items = []) => {
   exclusionList.innerHTML = '';
   if (!items.length) {
     exclusionSection.hidden = true;
+    if (exclusionBadge) {
+      exclusionBadge.textContent = '';
+    }
+    updateDividers();
     return;
   }
   exclusionSection.hidden = false;
+  
+  // Update exclusion badge
+  if (exclusionBadge) {
+    const count = items.length;
+    exclusionBadge.textContent = `${count} exclusion${count === 1 ? '' : 's'}`;
+  }
+  
   items.forEach((descriptor) => {
     const listItem = document.createElement('li');
     listItem.textContent = descriptor;
     exclusionList.appendChild(listItem);
   });
+  updateDividers();
 };
 
 const populateText = ({ text, title, url, excludedCount = 0, excluded = [] }) => {
@@ -744,7 +782,25 @@ const populateText = ({ text, title, url, excludedCount = 0, excluded = [] }) =>
   latestArticleTitle = title || '';
   latestArticleUrl = url || '';
   textContainer.textContent = latestText;
-  metadataElement.textContent = title ? `${title} — ${url}` : url;
+  
+  // Update page title section
+  if (pageTitleSection && pageLink && pageTitle) {
+    if (title || url) {
+      pageTitleSection.hidden = false;
+      pageTitle.textContent = title || url || 'Untitled';
+      pageLink.href = url || '#';
+      if (!url) {
+        pageLink.style.pointerEvents = 'none';
+        pageLink.style.cursor = 'default';
+      } else {
+        pageLink.style.pointerEvents = '';
+        pageLink.style.cursor = '';
+      }
+    } else {
+      pageTitleSection.hidden = true;
+    }
+  }
+  
   updateCounts(latestText, excludedCount);
   renderExclusions(excluded);
   const hasText = latestText.length > 0;
@@ -754,14 +810,6 @@ const populateText = ({ text, title, url, excludedCount = 0, excluded = [] }) =>
     textSection.classList.remove('empty');
   } else {
     textSection.classList.add('empty');
-  }
-  
-  // Update text badge
-  if (hasText) {
-    const wordCount = latestText.trim().split(/\s+/).length;
-    textBadge.textContent = `${wordCount} words`;
-  } else {
-    textBadge.textContent = '';
   }
   
   if (copyTextButton) copyTextButton.disabled = !hasText;
@@ -780,12 +828,13 @@ const populateText = ({ text, title, url, excludedCount = 0, excluded = [] }) =>
     clearBentoState(true);
   }
   refreshBentoControls();
+  updateDividers();
 };
 
 const setupCollapsibleSections = () => {
   // Initialize collapsible behavior
   collapseControllers.text = makeCollapsible(textSection, false);
-  collapseControllers.summary = makeCollapsible(summarySection, true);
+  collapseControllers.summary = makeCollapsible(summarySection, false); // Expanded by default
   collapseControllers.exclusion = makeCollapsible(exclusionSection, true);
 };
 
@@ -819,6 +868,7 @@ const extractPageText = async (clearSummary = true) => {
       if (copySummaryButton) copySummaryButton.disabled = true;
       clearBentoState(true);
       refreshBentoControls();
+      updateDividers();
       
       try {
         const key = `summary_${tab.id}`;
@@ -903,10 +953,16 @@ const toggleSelectionMode = async () => {
     }
 
     await ensureContentScript(tab.id);
-    const command = selectionActive ? COMMAND_TYPES.STOP_SELECTION : COMMAND_TYPES.START_SELECTION;
+    
+    const wasActive = selectionActive;
+    const command = wasActive ? COMMAND_TYPES.STOP_SELECTION : COMMAND_TYPES.START_SELECTION;
+    
+    console.log('Toggle selection mode:', wasActive ? 'stopping' : 'starting');
+    
     await sendMessageToTab(tab.id, { type: command });
-    if (!selectionActive) {
-      // Optimistically update UI; will be confirmed via selection status message.
+    
+    if (!wasActive) {
+      // Starting selection mode - optimistically update UI
       pendingPreview = false;
       document.body.classList.add('selection-active');
       if (selectionBadge) {
@@ -916,6 +972,25 @@ const toggleSelectionMode = async () => {
       refineButton.disabled = false;
       setStatus('Preparing selection mode…', 'notice');
       minimizePopup();
+    } else {
+      // Stopping selection mode - optimistically update UI immediately
+      console.log('Stopping selection - updating UI');
+      selectionActive = false;
+      refineButton.textContent = 'Exclude Elements';
+      refineButton.disabled = !latestText;
+      if (selectionBadge) {
+        selectionBadge.hidden = true;
+      }
+      document.body.classList.remove('selection-active', 'selection-preview');
+      restorePopup(true);
+      
+      // Re-enable buttons
+      if (copyTextButton) copyTextButton.disabled = !latestText;
+      downloadButton.disabled = !latestText;
+      summarizeButton.disabled = !latestText;
+      resetButton.disabled = latestExcludedCount === 0;
+      
+      setStatus('Finishing selection…', 'notice');
     }
   } catch (error) {
     console.error(error);
@@ -952,14 +1027,22 @@ const handleMessage = (message, sender) => {
       break;
     case MESSAGE_TYPES.SELECTION_STATUS: {
       const { active = false, reason } = message.payload || {};
-      updateSelectionUI(active);
+      console.log('Received SELECTION_STATUS:', { active, reason, currentState: selectionActive });
+      
+      // Only update UI if state actually changed (avoid redundant updates)
+      if (selectionActive !== active) {
+        updateSelectionUI(active);
+      }
+      
       if (!active) {
         if (reason === 'cancelled') {
           setStatus('Selection cancelled.', 'info');
         } else if (reason === 'reset') {
           setStatus('Cleared exclusions.', 'info');
-        } else if (reason === 'complete' && latestText) {
+        } else if (reason === 'complete') {
           setStatus('Selection applied. Refreshing text…', 'notice');
+          // Auto-extract text after finishing selection to show updated content
+          extractPageText(false);
         }
       }
       break;
@@ -1092,6 +1175,7 @@ const displaySummary = (summary, type, length) => {
   if (copySummaryButton) copySummaryButton.disabled = false;
   
   refreshBentoControls();
+  updateDividers();
 };
 
 // Determine a supported output language for the Summarizer API.
@@ -1128,6 +1212,7 @@ const handleSummarize = async () => {
   summaryBadge.classList.add('generating'); // Start flashing animation immediately
   clearBentoState(true);
   refreshBentoControls();
+  updateDividers();
   
   // Focus summary and minimize other sections
   focusSection(summarySection);
@@ -1175,7 +1260,8 @@ const handleSummarize = async () => {
 
     // Generate streaming summary - status shown in badge, not in status area
     const stream = await summarizer.summarizeStreaming(latestText, {
-      context: ''
+      context: '',
+      outputLanguage: preferredLanguage
     });
 
     let fullSummary = '';
@@ -1297,6 +1383,7 @@ if (resetButton) {
     if (copySummaryButton) copySummaryButton.disabled = true;
     clearBentoState(true);
     refreshBentoControls();
+    updateDividers();
     
     setStatus('✓ Reset complete.', 'info', false);
   } catch (error) {
