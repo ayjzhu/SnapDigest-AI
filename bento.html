@@ -54,19 +54,53 @@
     display: inline-block;
     background: linear-gradient(90deg, var(--grad-start), var(--grad-end));
     color: #fff;
-    font-weight: 700;
-    padding: 0.85rem 1.75rem;
-    border-radius: 1rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 0.75rem;
     text-decoration: none;
-    transition: opacity 0.2s ease;
+    transition: all 0.25s ease;
+    box-shadow: 0 2px 8px -2px rgba(126, 34, 206, 0.3);
   }
-  .bento-cta:hover { opacity: 0.9; }
+  .bento-cta:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px -2px rgba(126, 34, 206, 0.4);
+  }
+  .download-btn {
+    margin-top: 1.4rem;
+    margin-left: 0.75rem;
+    display: inline-block;
+    background: transparent;
+    color: var(--grad-end);
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 0.75rem 1.5rem;
+    border: 1.5px solid transparent;
+    background-image: linear-gradient(#fff, #fff), linear-gradient(90deg, var(--grad-start), var(--grad-end));
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    border-radius: 0.75rem;
+    text-decoration: none;
+    transition: all 0.25s ease;
+    cursor: pointer;
+  }
+  .download-btn:hover {
+    background: linear-gradient(90deg, var(--grad-start), var(--grad-end));
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px -2px rgba(126, 34, 206, 0.4);
+  }
   #bento-status {
-    min-height: 1.5rem;
+    display: none;
+  }
+  .bento-footer {
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--card-border);
     text-align: center;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     color: var(--text-subtle);
-    margin-bottom: 1.5rem;
   }
   #bento-grid {
     display: grid;
@@ -129,7 +163,8 @@
   }
   .tag {
     display: inline-block;
-    padding: 4px 12px;
+    width: fit-content;
+    padding: 3px 10px;
     border-radius: 999px;
     font-size: 0.7rem;
     font-weight: 600;
@@ -140,11 +175,11 @@
   }
   .card-title {
     margin: 0;
-    font-size: 1.15rem;
+    font-size: 1rem;
     font-weight: 700;
   }
   @media (min-width: 768px) {
-    .card-title { font-size: 1.3rem; }
+    .card-title { font-size: 1.1rem; }
   }
   .card-body {
     margin: 0;
@@ -225,12 +260,25 @@
   <header id="bento-header" class="bento-header">
     <h1 class="bento-title"><span id="hdr-title">Bento Title</span></h1>
     <p id="hdr-subtitle" class="bento-subtitle">Subtitle</p>
-    <a id="hdr-cta" href="#" target="_blank" rel="noopener" class="bento-cta">Read original</a>
+    <div>
+      <a id="hdr-cta" href="#" target="_blank" rel="noopener" class="bento-cta">Read original</a>
+      <button id="download-btn" class="download-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        Download HTML
+      </button>
+    </div>
   </header>
   <div id="bento-status"></div>
   <section id="bento-grid">
     <!-- cards injected here -->
   </section>
+  <footer id="bento-footer" class="bento-footer">
+    <!-- descriptor text injected here -->
+  </footer>
 </div>
 <script src="bento.js" defer></script>
 </body>

@@ -23,10 +23,20 @@
   };
 
   const statusEl = document.getElementById('bento-status');
+  const footerEl = document.getElementById('bento-footer');
   const setStatusText = (text) => {
     if (!statusEl) return;
     statusEl.textContent = text || '';
     statusEl.hidden = !text;
+  };
+  const setFooterText = (text) => {
+    if (!footerEl) return;
+    footerEl.textContent = text || '';
+    if (!text) {
+      footerEl.style.display = 'none';
+    } else {
+      footerEl.style.display = 'block';
+    }
   };
 
   const renderCard = (card) => {
@@ -129,11 +139,53 @@
         document.title = `${payload.article.title} | Bento Digest`;
       }
       const descriptor = payload.article?.title || payload.article?.url || '';
-      setStatusText(descriptor ? `Generated from ${descriptor}` : '');
+      setFooterText(descriptor ? `Generated from ${descriptor}` : '');
+
+      // Setup download button
+      const downloadBtn = document.getElementById('download-btn');
+      if (downloadBtn) {
+        downloadBtn.addEventListener('click', () => {
+          downloadHtml(payload);
+        });
+      }
     } catch (error) {
       console.error('Failed to load Bento payload:', error);
       setStatusText(error.message || 'Unable to load Bento data.');
     }
+  };
+
+  const downloadHtml = (payload) => {
+    // Get the full HTML document
+    const docClone = document.documentElement.cloneNode(true);
+    
+    // Remove the download button from the clone
+    const btnInClone = docClone.querySelector('#download-btn');
+    if (btnInClone) {
+      btnInClone.remove();
+    }
+
+    // Get the HTML string
+    const htmlContent = `<!DOCTYPE html>\n${docClone.outerHTML}`;
+    
+    // Create a blob and download
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    
+    // Generate filename from article title or use default
+    const title = payload.article?.title || 'bento-digest';
+    const filename = title
+      .replace(/[^a-z0-9-_]+/gi, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .toLowerCase() || 'bento-digest';
+    
+    a.download = `${filename}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   document.addEventListener('DOMContentLoaded', bootstrap);

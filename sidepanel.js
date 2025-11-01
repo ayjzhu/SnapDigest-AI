@@ -800,7 +800,7 @@ Task:
   .darkcard { background:#0f172a; color:#e2e8f0; border:1px solid #1e293b; box-shadow:0 6px 18px rgba(15,23,42,0.12); }
   .darkcard:hover { box-shadow:0 12px 20px -6px rgba(15,23,42,0.25); }
   .darkcard .tag { background:rgba(255,255,255,0.1); color:#cbd5e1; }
-  .tag { display:inline-block; padding:4px 12px; border-radius:999px; font-size:0.75rem; font-weight:600; background:#f1f5f9; color:#475569; text-transform:uppercase; letter-spacing:0.04em; }
+  .tag { display:inline-block; padding:3px 10px; border-radius:999px; font-size:0.65rem; font-weight:600; background:#f1f5f9; color:#475569; text-transform:uppercase; letter-spacing:0.04em; }
   .grid { display:grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap:1rem; }
   @media (min-width:768px){ .grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
   @media (min-width:1024px){ .grid { grid-template-columns: repeat(4,minmax(0,1fr)); } }
@@ -809,7 +809,8 @@ Task:
   .card-span-l { grid-column: span 1; }
   @media (min-width:768px){ .card-span-m { grid-column: span 2; } .card-span-l { grid-column: span 2; } }
   @media (min-width:1024px){ .card-span-l { grid-column: span 4; } }
-  .card-title { margin:8px 0 4px; font-size:1.25rem; }
+  .card-title { margin:8px 0 4px; font-size:1rem; }
+  @media (min-width:768px){ .card-title { font-size:1.1rem; } }
   .card-body { margin:0; color:#475569; font-size:0.95rem; }
   .darkcard .card-body, .darkcard .card-list li { color:#e2e8f0; }
   .card-list { margin:0; padding-left:1.2rem; color:#0f172a; }
