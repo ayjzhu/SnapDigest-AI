@@ -516,6 +516,7 @@
     min-height: 100px;
     word-wrap: break-word;
     overflow-wrap: break-word;
+    overflow: hidden;
     transition: transform 0.15s ease, box-shadow 0.15s ease;
   }
   .preview-root .card:hover {
@@ -551,12 +552,15 @@
     font-size: clamp(0.9rem, 2.5vw, 1rem);
     font-weight: 600;
     word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
   }
   .preview-root .card-body {
     margin: 4px 0 0;
     font-size: clamp(0.75rem, 2vw, 0.85rem);
     color: var(--text-muted);
     word-wrap: break-word;
+    overflow-wrap: break-word;
     line-height: 1.5;
   }
   .preview-root .darkcard .card-body,
@@ -567,6 +571,44 @@
     margin: 8px 0 0;
     padding-left: 1.2rem;
     font-size: 0.8rem;
+  }
+  .preview-root .card-list li {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.5;
+  }
+  .preview-root .inline-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 500;
+    border-bottom: 1px solid rgba(126, 34, 206, 0.3);
+    word-break: break-word;
+    transition: all 0.2s ease;
+    padding: 1px 3px;
+    border-radius: 3px;
+  }
+  .preview-root .inline-link:hover {
+    background: rgba(126, 34, 206, 0.08);
+    border-bottom-color: var(--accent);
+  }
+  .preview-root .inline-link::after {
+    content: '↗';
+    display: inline-block;
+    margin-left: 3px;
+    font-size: 0.85em;
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+  }
+  .preview-root .inline-link:hover::after {
+    opacity: 1;
+  }
+  .preview-root .darkcard .inline-link {
+    color: #a78bfa;
+    border-bottom-color: rgba(167, 139, 250, 0.4);
+  }
+  .preview-root .darkcard .inline-link:hover {
+    background: rgba(167, 139, 250, 0.15);
+    border-bottom-color: #c4b5fd;
   }
   .progress-pair {
     margin-top: 10px;
@@ -597,7 +639,17 @@
     margin-top: 8px;
   }
   .card-sources a {
-    color: inherit;
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 500;
+    border-bottom: 1px solid rgba(126, 34, 206, 0.2);
+    padding: 1px 4px;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+  }
+  .card-sources a:hover {
+    background: rgba(126, 34, 206, 0.08);
+    border-bottom-color: var(--accent);
   }
   
   /* Gradient text */

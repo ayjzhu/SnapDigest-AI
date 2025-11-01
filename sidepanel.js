@@ -208,6 +208,36 @@
       "'": '&#39;'
     }[match]));
 
+  // Convert URLs in text to clickable links
+  const linkifyText = (text) => {
+    if (!text) return '';
+    const urlRegex = /(https?:\/\/[^\s<>"]+)/g;
+    const textStr = String(text);
+    
+    // Split by URLs to separately escape text and URLs
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+    
+    while ((match = urlRegex.exec(textStr)) !== null) {
+      // Add escaped text before URL
+      if (match.index > lastIndex) {
+        parts.push(esc(textStr.substring(lastIndex, match.index)));
+      }
+      // Add URL as link (escape only for attribute, not the display)
+      const url = match[0];
+      parts.push(`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" class="inline-link">${esc(url)}</a>`);
+      lastIndex = match.index + url.length;
+    }
+    
+    // Add remaining text
+    if (lastIndex < textStr.length) {
+      parts.push(esc(textStr.substring(lastIndex)));
+    }
+    
+    return parts.join('');
+  };
+
   const clampPercent = (value) => {
     const num = Number(value);
     if (Number.isNaN(num)) {
@@ -457,11 +487,11 @@ Task:
       <div class="${baseClass} ${emphasisClass} ${sizeClass}">
         ${tag}
         <h3 class="card-title ${accentTitle}">${esc(card.title)}</h3>
-        ${card.body ? `<p class="${bodyClass}">${esc(card.body)}</p>` : ''}
+        ${card.body ? `<p class="${bodyClass}">${linkifyText(card.body)}</p>` : ''}
         ${
           Array.isArray(card.bullets) && card.bullets.length
             ? `<ul class="${listClass}">
-                ${card.bullets.slice(0, 6).map((bullet) => `<li>${esc(bullet)}</li>`).join('')}
+                ${card.bullets.slice(0, 6).map((bullet) => `<li>${linkifyText(bullet)}</li>`).join('')}
               </ul>`
             : ''
         }`;
@@ -830,6 +860,7 @@ Task:
 <script>
 const COLS = { s: 'card-span-s', m: 'card-span-m', l: 'card-span-l' };
 const esc = ${esc.toString()};
+const linkifyText = ${linkifyText.toString()};
 const clampPercent = ${clampPercent.toString()};
 const data = ${dataString};
 const renderCard = ${renderCard.toString()};

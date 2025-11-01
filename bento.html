@@ -136,6 +136,7 @@
     flex-direction: column;
     gap: 14px;
     height: 100%;
+    overflow: hidden;
   }
   @media (min-width: 1024px) {
     .card-block { padding: 30px; gap: 18px; }
@@ -177,6 +178,9 @@
     margin: 0;
     font-size: 1rem;
     font-weight: 700;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
   }
   @media (min-width: 768px) {
     .card-title { font-size: 1.1rem; }
@@ -185,6 +189,9 @@
     margin: 0;
     font-size: 0.95rem;
     color: var(--text-muted);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.6;
   }
   .card-list {
     margin: 0;
@@ -194,6 +201,45 @@
     gap: 0.45rem;
     font-size: 0.92rem;
     color: var(--text-default);
+  }
+  .card-list li {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.5;
+  }
+  .inline-link {
+    color: var(--grad-end);
+    text-decoration: none;
+    font-weight: 500;
+    border-bottom: 1px solid rgba(126, 34, 206, 0.3);
+    word-break: break-word;
+    transition: all 0.2s ease;
+    padding: 1px 3px;
+    border-radius: 3px;
+  }
+  .inline-link:hover {
+    background: rgba(126, 34, 206, 0.08);
+    border-bottom-color: var(--grad-end);
+    color: var(--grad-start);
+  }
+  .inline-link::after {
+    content: '↗';
+    display: inline-block;
+    margin-left: 3px;
+    font-size: 0.85em;
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+  }
+  .inline-link:hover::after {
+    opacity: 1;
+  }
+  .darkcard .inline-link {
+    color: #a78bfa;
+    border-bottom-color: rgba(167, 139, 250, 0.4);
+  }
+  .darkcard .inline-link:hover {
+    background: rgba(167, 139, 250, 0.15);
+    border-bottom-color: #c4b5fd;
   }
   .card-list--dark,
   .darkcard .card-body,
@@ -234,11 +280,17 @@
     color: var(--text-subtle);
   }
   .card-sources a {
-    color: inherit;
-    text-decoration: underline;
+    color: var(--grad-end);
+    text-decoration: none;
+    font-weight: 500;
+    border-bottom: 1px solid rgba(126, 34, 206, 0.2);
+    padding: 1px 4px;
+    border-radius: 3px;
+    transition: all 0.2s ease;
   }
   .card-sources a:hover {
-    text-decoration: none;
+    background: rgba(126, 34, 206, 0.08);
+    border-bottom-color: var(--grad-end);
   }
   .darkcard {
     background: #0f172a;

@@ -206,7 +206,7 @@ const getTabAccessError = (tab) => {
 };
 
 if (bentoOpenPanelButton) {
-  bentoOpenPanelButton.removeAttribute('title');
+  bentoOpenPanelButton.setAttribute('title', BENTO_PANEL_BUTTON_TOOLTIP_OPEN);
   bentoOpenPanelButton.dataset.tooltip = BENTO_PANEL_BUTTON_TOOLTIP_OPEN;
   bentoOpenPanelButton.setAttribute('aria-label', BENTO_PANEL_BUTTON_TOOLTIP_OPEN);
 }
@@ -333,6 +333,7 @@ const updateSidePanelAccess = async () => {
   // Update tooltip
   const tooltip = isPanelOpen ? BENTO_PANEL_BUTTON_TOOLTIP_CLOSE : BENTO_PANEL_BUTTON_TOOLTIP_OPEN;
   bentoOpenPanelButton.setAttribute('aria-label', tooltip);
+  bentoOpenPanelButton.setAttribute('title', tooltip);
   bentoOpenPanelButton.dataset.tooltip = tooltip;
   
   // Add visual indicator class when panel is open
@@ -568,6 +569,7 @@ const handleOpenSidePanelOnly = async () => {
     labelElement.textContent = BENTO_PANEL_BUTTON_LABEL_WORKING;
   }
   bentoOpenPanelButton.setAttribute('aria-label', BENTO_PANEL_BUTTON_LABEL_WORKING);
+  bentoOpenPanelButton.setAttribute('title', BENTO_PANEL_BUTTON_LABEL_WORKING);
   bentoOpenPanelButton.dataset.tooltip = BENTO_PANEL_BUTTON_LABEL_WORKING;
   
   try {
