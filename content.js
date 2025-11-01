@@ -32,7 +32,7 @@
     try {
       chrome.runtime.sendMessage({ type, payload });
     } catch (error) {
-      console.warn('Plain Text Snapshot: message dispatch failed', error);
+      console.warn('SnapDigest AI: message dispatch failed', error);
     }
   };
 
@@ -135,9 +135,9 @@
         excludedCount: excludedElements.size,
         excluded: getExcludedDescriptors()
       };
-      sendMessage(MESSAGE_TYPES.TEXT, payload);
+      sendMessage(MESSAGE_TYPES.TEXT, result);
     } catch (error) {
-      console.error('Plain Text Snapshot: extraction failed', error);
+      console.error('SnapDigest AI: extraction failed', error);
       sendMessage(MESSAGE_TYPES.TEXT, {
         text: '',
         title: document.title || '',
@@ -354,7 +354,7 @@
         try {
           fn();
         } catch (error) {
-          console.warn('Plain Text Snapshot: selection cleanup failed', error);
+          console.warn('SnapDigest AI: selection cleanup failed', error);
         }
       });
     };

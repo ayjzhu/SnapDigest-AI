@@ -1,17 +1,31 @@
-# Plain Text Snapshot
+# SnapDigest AI
 
-A Chrome extension that captures the visible text from the active tab and presents it in a clean, scrollable popup with AI-powered summarization and Bento grid visualization.
+A Chrome extension that transforms how you consume web content by extracting visible text, generating AI-powered summaries, and creating beautiful visual digests—all processed locally on your device using Chrome's built-in AI capabilities.
 
-## Features
+## 🎯 Problem Statement
 
-- One-click extraction of all visible text via `document.body.innerText`
-- Interactive "Exclude Elements" mode that temporarily minimizes the popup so you can click page elements to omit them, flashing the popup with updated text after each exclusion while staying in selection mode
-- Right-click any dashed (excluded) element to restore it, or use **Reset** to clear all exclusions
-- **AI-Powered Summarization**: Generate summaries using Chrome's built-in Summarizer API with options for type (TL;DR, Key Points, etc.) and length
-- **Bento Grid Visualization**: Create beautiful, structured visual summaries using Chrome's built-in Prompt API with live preview in the side panel
-- Displays page title, URL, word and character counts with exclusion tally
-- Copy-to-clipboard and download-as-text helpers
-- Minimal monospace UI with accessible status feedback
+Modern web pages are cluttered with ads, navigation menus, sidebars, and distractions that make it difficult to focus on the actual content. Reading long articles is time-consuming, and understanding key information at a glance is challenging. SnapDigest AI solves this by:
+
+1. **Extracting clean text** from any web page, filtering out noise
+2. **Generating instant AI summaries** to capture key points in seconds
+3. **Creating visual Bento grid digests** that present information in an organized, scannable format
+4. **Processing everything locally** for privacy and speed—no data leaves your browser
+
+## 🚀 Features & Functionality
+
+### Core Capabilities
+
+- **Smart Text Extraction**: One-click extraction of all visible text via `document.body.innerText`
+- **Interactive Element Exclusion**: Click-to-exclude mode that lets you remove unwanted page elements (ads, navigation, sidebars) before extraction
+- **AI-Powered Summarization**: Generate summaries using Chrome's **Summarizer API** with multiple formats:
+  - **TL;DR**: Quick overview
+  - **Key Points**: Bulleted highlights
+  - **Teaser**: Brief preview
+  - **Headline**: Single-line summary
+- **Visual Bento Grid**: Create structured card layouts using Chrome's **Prompt API** that organize information into digestible visual blocks
+- **Right-Click Restoration**: Easily restore excluded elements if you change your mind
+- **Copy & Download**: Export extracted text or summaries to clipboard or file
+- **Persistent State**: Summaries are saved per-tab and restored when reopening the popup
 
 ## Requirements
 
@@ -48,12 +62,52 @@ To use the AI-powered features, you need:
 1. Open `chrome://extensions/` in Chrome.
 2. Enable **Developer mode** (top-right toggle).
 3. Choose **Load unpacked** and select this folder.
-4. Pin the "Plain Text Snapshot" extension for quick access.
+4. Pin the "SnapDigest AI" extension for quick access.
 5. Visit any page, click the extension icon, and press **Extract Text** (it also auto-runs on open).
 6. Use **Exclude Elements** to enter selection mode; the popup minimizes so you can hover the page and click exactly one element to exclude. The popup reopens with updated text automatically.
 7. Right-click a dashed element to restore it, or click **Reset** to clear every exclusion.
 8. Click **Summarize** to generate an AI summary of the extracted text.
 9. Once you have a summary, click **Render Bento Grid** to create a visual digest in the side panel.
+
+### 💡How Chrome Built-in AI APIs Used
+
+#### 1. **Summarizer API** (`self.Summarizer`)
+- **Purpose**: Generate natural language summaries of extracted web content
+- **Implementation**: 
+  - Checks model availability (`readily`, `after-download`, or `no`)
+  - Creates summarizer sessions with configurable options (type, length, output language)
+  - Uses streaming API for real-time summary generation
+  - Supports multiple summary types and lengths
+- **Model**: Gemini Nano (1.5GB, downloaded automatically on first use)
+
+#### 2. **Prompt API** (`self.ai.languageModel`)
+- **Purpose**: Generate structured Bento grid layouts from summaries
+- **Implementation**:
+  - Uses JSON Schema constraints to enforce structured output format
+  - Creates visual card layouts with different sizes (small/medium/large) and emphasis styles
+  - Generates headers, takeaways, statistics, quotes, tips, and link collections
+  - Renders both code preview and live HTML output
+- **Model**: Gemini Nano (shared with Summarizer API)
+
+### Privacy & Performance
+
+- **100% On-Device Processing**: All AI operations run locally using Chrome's built-in Gemini Nano model
+- **No External API Calls**: Zero data transmission to external servers
+- **No Tracking**: No analytics, cookies, or user data collection
+- **Fast & Responsive**: Local processing means instant results without network latency
+
+## Technical Architecture
+
+**Built with**: Vanilla JavaScript (Manifest V3) - No external frameworks or dependencies
+
+**Key Components**:
+- **popup.js**: Main UI controller with state management via `chrome.storage.local`
+- **content.js**: Injected script for text extraction and interactive element selection
+- **sidepanel.js**: Bento grid generator using Prompt API with JSON Schema constraints
+- **background.js**: Service worker coordinating side panel lifecycle
+- **bento.js**: Standalone viewer for generated Bento grids
+
+**Message Passing**: popup ↔ content script ↔ background worker ↔ side panel
 
 ## Notes
 

@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Plain Text Snapshot",
-  "description": "Extracts the active page's visible text and generates AI-powered summaries with persistent session storage.",
+  "name": "SnapDigest AI",
+  "description": "Extract, summarize, and visualize web content with on-device AI. Create instant text snapshots and beautiful Bento grid digests.",
   "version": "2.1.1",
   "action": {
-    "default_title": "Plain Text Snapshot",
+    "default_title": "SnapDigest AI",
     "default_popup": "popup.html"
   },
   "permissions": [
