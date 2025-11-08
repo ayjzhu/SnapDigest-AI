@@ -1,86 +1,137 @@
 # SnapDigest AI
 
-A Chrome extension that transforms how you consume web content by extracting visible text, generating AI-powered summaries, and creating beautiful visual digests—all processed locally on your device using Chrome's built-in AI capabilities.
+> Transform web content into clean summaries and visual digests—powered entirely by Chrome's built-in AI
 
-## 🎯 Problem Statement
+A Chrome extension that extracts visible text, generates AI-powered summaries, and creates beautiful Bento grid layouts—all processed locally on your device using Chrome's built-in Gemini Nano model.
 
-Modern web pages are cluttered with ads, navigation menus, sidebars, and distractions that make it difficult to focus on the actual content. Reading long articles is time-consuming, and understanding key information at a glance is challenging. SnapDigest AI solves this by:
+[![Chrome](https://img.shields.io/badge/Chrome-127%2B-blue?logo=google-chrome)](https://www.google.com/chrome/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Manifest V3](https://img.shields.io/badge/Manifest-V3-orange.svg)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 
-1. **Extracting clean text** from any web page, filtering out noise
-2. **Generating instant AI summaries** to capture key points in seconds
-3. **Creating visual Bento grid digests** that present information in an organized, scannable format
-4. **Processing everything locally** for privacy and speed—no data leaves your browser
+## ✨ Features
 
-## 🚀 Features & Functionality
+- **🔍 Smart Text Extraction** - One-click extraction of all visible text from any webpage
+- **🎯 Interactive Element Exclusion** - Click to remove unwanted elements (ads, navigation, sidebars)
+- **🤖 AI-Powered Summaries** - Generate instant summaries using Chrome's Summarizer API
+  - TL;DR, Key Points, Teaser, and Headline formats
+  - Multiple length options (short, medium, long)
+- **📊 Visual Bento Grids** - Create structured card layouts using Chrome's Prompt API
+- **🔄 Element Restoration** - Right-click to restore excluded elements
+- **💾 Export Options** - Copy to clipboard or download as text file
+- **🔒 Privacy First** - 100% on-device processing, zero external API calls
+- **⚡ Fast & Responsive** - No network latency, instant results
 
-### Core Capabilities
+## 📋 Table of Contents
 
-- **Smart Text Extraction**: One-click extraction of all visible text via `document.body.innerText`
-- **Interactive Element Exclusion**: Click-to-exclude mode that lets you remove unwanted page elements (ads, navigation, sidebars) before extraction
-- **AI-Powered Summarization**: Generate summaries using Chrome's **Summarizer API** with multiple formats:
-  - **TL;DR**: Quick overview
-  - **Key Points**: Bulleted highlights
-  - **Teaser**: Brief preview
-  - **Headline**: Single-line summary
-- **Visual Bento Grid**: Create structured card layouts using Chrome's **Prompt API** that organize information into digestible visual blocks
-- **Right-Click Restoration**: Easily restore excluded elements if you change your mind
-- **Copy & Download**: Export extracted text or summaries to clipboard or file
-- **Persistent State**: Summaries are saved per-tab and restored when reopening the popup
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Usage](#usage)
+- [How It Works](#how-it-works)
+- [Technical Architecture](#technical-architecture)
+- [Troubleshooting](#troubleshooting)
+- [Privacy & Security](#privacy--security)
+- [License](#license)
 
-## Requirements
+## 🔧 Requirements
 
-### For AI Features (Summarization & Bento Grid)
+### Browser & System
 
-To use the AI-powered features, you need:
+- **Chrome Version**: 127 or later (recommended: Chrome 138+)
+- **Operating System**:
+  - Windows 10 or 11
+  - macOS 13+ (Ventura or later)
+  - Linux
+  - ChromeOS (Platform 16389.0.0+)
 
-1. **Chrome Version**: Chrome 127 or later (recommended: Chrome 138+)
-2. **Operating System**:
-   - Windows 10 or 11
-   - macOS 13+ (Ventura and onwards)
-   - Linux
-   - ChromeOS on Chromebook Plus devices (Platform 16389.0.0+)
-3. **Hardware**:
-   - **Storage**: At least 22 GB of free space for Gemini Nano model
-   - **GPU**: More than 4 GB of VRAM, OR
-   - **CPU**: 16 GB of RAM or more AND 4 CPU cores or more
-4. **Network**: Unlimited data or unmetered connection for initial model download
+### Hardware (for AI Features)
 
-### Enable AI Features in Chrome
+- **Storage**: 22 GB free space (for Gemini Nano model)
+- **GPU**: 4 GB+ VRAM, **OR**
+- **CPU/RAM**: 4+ CPU cores AND 16 GB+ RAM
+- **Network**: Unlimited data connection (for initial model download)
 
-1. Open `chrome://flags/#optimization-guide-on-device-model`
+### Enable Chrome AI Features
+
+1. Navigate to `chrome://flags/#optimization-guide-on-device-model`
 2. Set to **Enabled**
-3. Open `chrome://flags/#prompt-api-for-gemini-nano`
+3. Navigate to `chrome://flags/#prompt-api-for-gemini-nano`
 4. Set to **Enabled**
-5. Restart Chrome
-6. Visit `chrome://components/` and check for "Optimization Guide On Device Model"
-7. If the version shows "0.0.0.0", click **Check for update** to download Gemini Nano
+5. **Restart Chrome**
+6. Visit `chrome://components/`
+7. Find "Optimization Guide On Device Model"
+8. If version shows "0.0.0.0", click **Check for update** to download Gemini Nano (~1.5 GB)
 
-**Note**: The first time you use AI features, Chrome may need to download the Gemini Nano model (approximately 1.5+ GB). This happens automatically when you click the Summarize or Render Bento Grid buttons.
+> **Note**: The Gemini Nano model downloads automatically on first use. Ensure you have sufficient storage and an unmetered internet connection.
 
-## Getting Started
+## 📦 Installation
 
-1. Open `chrome://extensions/` in Chrome.
-2. Enable **Developer mode** (top-right toggle).
-3. Choose **Load unpacked** and select this folder.
-4. Pin the "SnapDigest AI" extension for quick access.
-5. Visit any page, click the extension icon, and press **Extract Text** (it also auto-runs on open).
-6. Use **Exclude Elements** to enter selection mode; the popup minimizes so you can hover the page and click exactly one element to exclude. The popup reopens with updated text automatically.
-7. Right-click a dashed element to restore it, or click **Reset** to clear every exclusion.
-8. Click **Summarize** to generate an AI summary of the extracted text.
-9. Once you have a summary, click **Render Bento Grid** to create a visual digest in the side panel.
+1. Open `chrome://extensions/` in Chrome
+2. Enable **Developer mode** (toggle in top-right corner)
+3. Click **Load unpacked**
+4. Select the extension folder
+5. Pin the extension icon for quick access
 
-### 💡How Chrome Built-in AI APIs Used
+## 🚀 Usage
 
-#### 1. **Summarizer API** (`self.Summarizer`)
+### Basic Text Extraction
+
+1. Navigate to any webpage
+2. Click the SnapDigest AI extension icon
+3. Text is automatically extracted (or click **Extract Text**)
+
+### Interactive Element Exclusion
+
+1. Click **Exclude Elements** to enter selection mode
+2. The popup minimizes - hover over page elements
+3. Click any element to exclude it from extraction
+4. Right-click excluded elements (dashed outline) to restore them
+5. Click **Reset** to clear all exclusions
+
+### AI Summarization
+
+1. After extracting text, click **Summarize**
+2. Select summary format:
+   - **TL;DR** - Quick overview
+   - **Key Points** - Bulleted highlights
+   - **Teaser** - Brief preview
+   - **Headline** - Single-line summary
+3. Choose summary length (short, medium, long)
+4. View streaming results in real-time
+
+### Bento Grid Visualization
+
+1. Generate a summary first
+2. Click **Render Bento Grid**
+3. Visual digest opens in side panel
+4. Structured cards display:
+   - Headers and takeaways
+   - Statistics and metrics
+   - Quotes and highlights
+   - Tips and actionable items
+   - Related links
+
+### Export Options
+
+- **Copy to clipboard**: Click copy button
+- **Download as file**: Click download button
+- Supports both extracted text and summaries
+
+## 🔬 How It Works
+
+### Chrome Built-in AI APIs
+
+#### 1. Summarizer API (`self.Summarizer`)
+
 - **Purpose**: Generate natural language summaries of extracted web content
-- **Implementation**: 
+- **Implementation**:
   - Checks model availability (`readily`, `after-download`, or `no`)
   - Creates summarizer sessions with configurable options (type, length, output language)
   - Uses streaming API for real-time summary generation
   - Supports multiple summary types and lengths
 - **Model**: Gemini Nano (1.5GB, downloaded automatically on first use)
 
-#### 2. **Prompt API** (`self.ai.languageModel`)
+#### 2. Prompt API (`self.ai.languageModel`)
+
 - **Purpose**: Generate structured Bento grid layouts from summaries
 - **Implementation**:
   - Uses JSON Schema constraints to enforce structured output format
@@ -89,59 +140,104 @@ To use the AI-powered features, you need:
   - Renders both code preview and live HTML output
 - **Model**: Gemini Nano (shared with Summarizer API)
 
-### Privacy & Performance
+## 🏗️ Technical Architecture
 
-- **100% On-Device Processing**: All AI operations run locally using Chrome's built-in Gemini Nano model
-- **No External API Calls**: Zero data transmission to external servers
-- **No Tracking**: No analytics, cookies, or user data collection
-- **Fast & Responsive**: Local processing means instant results without network latency
-
-## Technical Architecture
-
-**Built with**: Vanilla JavaScript (Manifest V3) - No external frameworks or dependencies
+**Tech Stack**: Vanilla JavaScript (Manifest V3) - No external frameworks or dependencies
 
 **Key Components**:
+
 - **popup.js**: Main UI controller with state management via `chrome.storage.local`
 - **content.js**: Injected script for text extraction and interactive element selection
 - **sidepanel.js**: Bento grid generator using Prompt API with JSON Schema constraints
 - **background.js**: Service worker coordinating side panel lifecycle
 - **bento.js**: Standalone viewer for generated Bento grids
 
-**Message Passing**: popup ↔ content script ↔ background worker ↔ side panel
+**Message Passing Flow**:
 
-## Notes
+```plaintext
+popup ↔ content script ↔ background worker ↔ side panel
+```
 
-- The extension only requests the `activeTab`, `scripting`, `tabs`, `storage`, and `sidePanel` permissions.
-- Text extraction and AI processing run entirely locally; no data leaves your browser.
-- For highly dynamic pages, re-run extraction to capture the freshest content.
-- Exclusions are remembered per tab while the page stays loaded; reload the page or press **Reset** to start fresh.
-- During selection, the popup minimizes to keep focus on the page; it automatically returns once the update finishes.
-- Summaries and Bento grids are stored per-tab and persist until the page is refreshed or the extension is reloaded.
+**Permissions**:
 
-## Troubleshooting
+- `activeTab` - Access current tab content
+- `scripting` - Inject content scripts
+- `tabs` - Tab management
+- `storage` - Persist summaries and state
+- `sidePanel` - Display Bento grids
+
+## 🔒 Privacy & Security
+
+- **100% On-Device Processing** - All AI operations run locally using Chrome's built-in Gemini Nano model
+- **No External API Calls** - Zero data transmission to external servers
+- **No Tracking** - No analytics, cookies, or user data collection
+- **Fast & Responsive** - Local processing means instant results without network latency
+- **Minimal Permissions** - Only requests essential Chrome extension permissions
+
+## 🐛 Troubleshooting
 
 ### "Prompt API is not available in this browser"
 
+**Solutions**:
+
 - Ensure you're using Chrome 127 or later
-- Check that AI flags are enabled (see Enable AI Features section above)
-- Verify the Gemini Nano model is downloaded at `chrome://components/`
-- Check your device meets the hardware requirements
-- Try the test page at `test-prompt-api.html` to diagnose the issue
-
-### Model download is slow or fails
-
-- Ensure you have an unmetered (unlimited) internet connection
-- Check that you have at least 22 GB of free disk space
-- The download may take several minutes depending on your connection speed
+- Verify AI flags are enabled (see [Enable Chrome AI Features](#enable-chrome-ai-features))
+- Check Gemini Nano model is downloaded at `chrome://components/`
+- Confirm your device meets the hardware requirements
+- Restart Chrome after enabling flags
 
 ### "Summarizer API is not available"
 
-- Follow the same steps as for Prompt API issues
-- The Summarizer and Prompt APIs share the same Gemini Nano model
+**Solutions**:
+
+- Follow the same steps as Prompt API issues
+- Both APIs share the same Gemini Nano model
+- Ensure model download completed successfully
+
+### Model download is slow or fails
+
+**Solutions**:
+
+- Use an unmetered (unlimited) internet connection
+- Verify at least 22 GB of free disk space
+- Allow several minutes for download (1.5+ GB model)
+- Check `chrome://components/` for download status
+- Try manually clicking "Check for update" for "Optimization Guide On Device Model"
 
 ### "Side panel API is not available"
 
-- Ensure you're using Chrome 114 or later
-- Check that the extension has the `sidePanel` permission in manifest.json
-- Try reloading the extension at `chrome://extensions/`
-- Restart Chrome if the issue persists
+**Solutions**:
+
+- Ensure Chrome 114 or later
+- Verify `sidePanel` permission in `manifest.json`
+- Reload extension at `chrome://extensions/`
+- Restart Chrome if issue persists
+
+### Extraction not working on dynamic pages
+
+**Solutions**:
+
+- Wait for page to fully load before extraction
+- Click **Extract Text** manually to refresh
+- Check browser console for JavaScript errors
+
+## 📝 Additional Notes
+
+- Text extraction and AI processing run entirely locally - no data leaves your browser
+- For highly dynamic pages, re-run extraction to capture fresh content
+- Exclusions are remembered per tab until page reload
+- During selection mode, popup minimizes automatically and returns after update
+- Summaries and Bento grids persist per-tab until page refresh or extension reload
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Built with Chrome's experimental [Built-in AI APIs](https://developer.chrome.com/docs/ai/built-in)
+- Powered by [Gemini Nano](https://deepmind.google/technologies/gemini/nano/) on-device model
+
+---
+
+Made with ❤️ for a better web reading experience
